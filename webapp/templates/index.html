@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LEGO Pick a Brick Pricer</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="page">
+    <h1>LEGO Pick a Brick Pricer</h1>
+    <p class="subtitle">Drag a bricks CSV in to price every part against the official LEGO Pick a Brick site (GBP).</p>
+
+    {% if error %}
+      <div class="banner banner-error">{{ error }}</div>
+    {% endif %}
+
+    <form id="upload-form" action="/upload" method="post" enctype="multipart/form-data">
+      <label id="dropzone" for="file-input" class="dropzone">
+        <span class="dropzone-icon">&#128230;</span>
+        <span id="dropzone-text">Drag &amp; drop your CSV here, or click to browse</span>
+        <input id="file-input" type="file" name="file" accept=".csv" required hidden />
+      </label>
+      <button type="submit" class="btn btn-primary">Price this CSV</button>
+    </form>
+
+    <div id="loading-overlay" class="overlay hidden">
+      <div class="spinner"></div>
+      <p>Pricing bricks against LEGO.com&hellip; this can take a little while for large lists.</p>
+    </div>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

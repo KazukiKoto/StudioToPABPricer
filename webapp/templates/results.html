@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pricing results &mdash; {{ source_name }}</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="page page-wide">
+    <div class="results-header">
+      <div>
+        <h1>Pricing results</h1>
+        <p class="subtitle">{{ source_name }}</p>
+      </div>
+      <a class="btn btn-secondary" href="/">Upload another file</a>
+    </div>
+
+    {% if message %}
+      <div class="banner banner-info">{{ message }}</div>
+    {% endif %}
+
+    <div class="summary-cards">
+      <div class="card">
+        <span class="card-label">Total qty</span>
+        <span class="card-value">{{ total_qty }}</span>
+      </div>
+      <div class="card">
+        <span class="card-label">Total cost</span>
+        <span class="card-value">&pound;{{ "%.2f"|format(total_cost) }}</span>
+      </div>
+      <div class="card card-ok">
+        <span class="card-label">Priced on PAB</span>
+        <span class="card-value">{{ found_count }}</span>
+      </div>
+      <div class="card {% if not_found_count %}card-warn{% endif %}">
+        <span class="card-label">Needs attention</span>
+        <span class="card-value">{{ not_found_count }}</span>
+      </div>
+    </div>
+
+    <a class="btn btn-primary" href="/download/{{ token }}">Download priced CSV</a>
+
+    <h2>Priced bricks</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Part</th>
+            <th>Name</th>
+            <th>Colour</th>
+            <th>Qty</th>
+            <th>Unit price</th>
+            <th>Line total</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for idx, row in rows %}
+            {% if row.Availability not in not_found_statuses and row.Availability != "MANUAL" %}
+            <tr>
+              <td>{{ row.BLItemNo }}</td>
+              <td>{{ row.PartName }}</td>
+              <td>{{ row.ColorName }}</td>
+              <td>{{ row.Qty }}</td>
+              <td>&pound;{{ row.UnitPriceGBP }}</td>
+              <td>&pound;{{ row.LineTotalGBP }}</td>
+              <td><span class="badge badge-ok">{{ row.Availability }}</span></td>
+            </tr>
+            {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if not_found_count or manual_count %}
+    <h2>Not found on Pick a Brick</h2>
+    <p class="subtitle">These parts/colours weren&rsquo;t matched on the official site (often discontinued colours). Enter a manual unit price (GBP) to accept it into the total, then recalculate.</p>
+
+    <form action="/finalize/{{ token }}" method="post">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Part</th>
+              <th>Name</th>
+              <th>Colour</th>
+              <th>Qty</th>
+              <th>Manual unit price (GBP)</th>
+              <th>Line total</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for idx, row in rows %}
+              {% if row.Availability in not_found_statuses or row.Availability == "MANUAL" %}
+              <tr>
+                <td>{{ row.BLItemNo }}</td>
+                <td>{{ row.PartName }}</td>
+                <td>{{ row.ColorName }}</td>
+                <td>{{ row.Qty }}</td>
+                <td>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    min="0"
+                    name="manual_price_{{ idx }}"
+                    placeholder="e.g. 0.15"
+                    value="{{ row.UnitPriceGBP if row.Availability == 'MANUAL' else '' }}"
+                  />
+                </td>
+                <td>{% if row.LineTotalGBP %}&pound;{{ row.LineTotalGBP }}{% else %}&mdash;{% endif %}</td>
+                <td>
+                  {% if row.Availability == "MANUAL" %}
+                    <span class="badge badge-manual">Manual</span>
+                  {% else %}
+                    <span class="badge badge-warn">Not found</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <button type="submit" class="btn btn-primary">Accept prices &amp; recalculate</button>
+    </form>
+    {% endif %}
+  </main>
+</body>
+</html>

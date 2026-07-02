@@ -1,0 +1,9 @@
+# The core CLI pricer (pab_pricer) uses only the Python standard library
+# plus the system `curl` binary (curl.exe ships with Windows 10/11, macOS,
+# and most Linux distros) — no third-party packages needed there.
+#
+# The web UI (webapp/) needs the following:
+fastapi>=0.111
+uvicorn[standard]>=0.30
+jinja2>=3.1
+python-multipart>=0.0.9
