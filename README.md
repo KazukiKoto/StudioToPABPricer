@@ -6,6 +6,12 @@ converted to CSV) against the official LEGO Pick a Brick website, in GBP.
 Ships as both a CLI and a small FastAPI web UI, and is Dockerized so it doesn't depend
 on the host's Python version.
 
+## Screenshots
+
+| Upload | Results |
+| --- | --- |
+| ![Upload page](docs/screenshots/input.png) | ![Results page](docs/screenshots/results.png) |
+
 ## Quick start (Docker, recommended)
 
 ```

@@ -49,6 +49,18 @@ function wireRow(row) {
   const dropLabel = row.querySelector(".file-row-drop");
   const input = row.querySelector('input[type="file"]');
   const removeBtn = row.querySelector(".btn-remove-row");
+  const multiplierInput = row.querySelector('input[name="multipliers"]');
+  const minusBtn = row.querySelector(".stepper-minus");
+  const plusBtn = row.querySelector(".stepper-plus");
+
+  function stepMultiplier(delta) {
+    const min = parseInt(multiplierInput.min, 10) || 1;
+    const current = parseInt(multiplierInput.value, 10) || min;
+    multiplierInput.value = Math.max(min, current + delta);
+  }
+
+  minusBtn.addEventListener("click", () => stepMultiplier(-1));
+  plusBtn.addEventListener("click", () => stepMultiplier(1));
 
   input.addEventListener("change", () => {
     if (input.files.length) {

@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>LEGO Pick a Brick Pricer</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%B1%3C/text%3E%3C/svg%3E" />
   <link rel="stylesheet" href="/static/style.css" />
   <script>
     (function () {
@@ -20,7 +21,10 @@
   </button>
 
   <main class="page">
-    <h1>LEGO Pick a Brick Pricer</h1>
+    <div class="studs" aria-hidden="true">
+      <span class="stud"></span><span class="stud"></span><span class="stud"></span><span class="stud"></span>
+    </div>
+    <h1>Pick a Brick <span class="highlight">Pricer</span></h1>
     <p class="subtitle">Drag in one or more bricks CSVs to price every part against the official LEGO Pick a Brick site (GBP). Set &ldquo;Copies&rdquo; on a CSV to build several of that design (e.g. 3&times; one list and 17&times; another) into a single aggregate total.</p>
 
     {% if error %}
@@ -41,10 +45,14 @@
               <input type="file" name="files" accept=".csv,text/csv" hidden />
             </label>
             <div class="file-row-controls">
-              <label class="multiplier-label">
-                Copies
-                <input type="number" name="multipliers" min="1" step="1" value="1" required />
-              </label>
+              <div class="multiplier-label">
+                <span class="multiplier-label-text">Copies</span>
+                <div class="stepper">
+                  <button type="button" class="stepper-btn stepper-minus" aria-label="Decrease copies">&minus;</button>
+                  <input type="number" name="multipliers" min="1" step="1" value="1" required aria-label="Copies" />
+                  <button type="button" class="stepper-btn stepper-plus" aria-label="Increase copies">&plus;</button>
+                </div>
+              </div>
               <button type="button" class="btn btn-remove-row" aria-label="Remove this CSV">&times;</button>
             </div>
           </div>
