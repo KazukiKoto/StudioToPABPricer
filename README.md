@@ -17,19 +17,30 @@ make restart   # stop + start
 Or price a CSV without the web UI:
 
 ```
-make docker-price CSV=runway_sample.csv
+make docker-price CSV=input/your_parts_list.csv
 ```
 
 Priced CSVs are written to `outputs/`.
 
 ## Web UI
 
-Drag a CSV in at `http://localhost:8000`. You'll get:
+Drag in one or more CSVs at `http://localhost:8000`. Each file gets its own row with
+a "Copies" count, so you can price several builds at once (e.g. 3&times; one list
+and 17&times; another) as a single aggregate total. Files are validated as CSV both
+in the browser and on the server before pricing. You'll get:
 
-- A priced table for every part LEGO's site matched, with GBP unit/line totals.
+- A priced table for every part LEGO's site matched, with GBP unit/line totals
+  (rounded to 2dp).
 - A "not found" table (usually discontinued colours PAB no longer sells) where you
-  can enter a manual unit price to accept it into the total.
-- A CSV download of the final, reconciled result.
+  can enter a manual unit price to accept it into the total. The same missing piece
+  is combined into one row even if it appeared in multiple uploaded CSVs.
+- A "Download" button for the final, reconciled result, with a dropdown for either
+  format:
+  - **Simple** (default) — one row per unique part/colour with combined qty and
+    line total.
+  - **Detailed** — every priced line item as-is.
+
+  Both are saved as `outputs/<timestamp>_simple.csv` / `outputs/<timestamp>_detailed.csv`.
 
 ## Native (no Docker)
 
@@ -38,8 +49,8 @@ and most Linux distros).
 
 ```
 make install
-make price CSV=runway_sample.csv   # CLI
-make web                           # web UI at http://localhost:8000
+make price CSV=input/your_parts_list.csv   # CLI
+make web                                   # web UI at http://localhost:8000
 ```
 
 ## How pricing works
@@ -55,5 +66,7 @@ library by TLS fingerprint but allows plain `curl` — so the fetcher shells out
 
 ## Input CSV format
 
-Expects at least these columns: `BLItemNo`, `ElementId`, `PartName`, `Qty` (see
-`runway_sample.csv`). Rows missing any of these, or blank/summary rows, are skipped.
+Expects at least these columns: `BLItemNo`, `ElementId`, `PartName`, `Qty`. Rows
+missing any of these, or blank/summary rows, are skipped.
+
+Local part-list CSVs can be kept in `input/`, which is gitignored.
