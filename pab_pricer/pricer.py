@@ -167,8 +167,8 @@ def price_rows(
         qty = int(row["Qty"])
         out_row = dict(row)
         if element and element.unit_price_gbp is not None:
-            out_row["UnitPriceGBP"] = f"{element.unit_price_gbp:.4f}"
-            out_row["LineTotalGBP"] = f"{element.unit_price_gbp * qty:.4f}"
+            out_row["UnitPriceGBP"] = f"{element.unit_price_gbp:.2f}"
+            out_row["LineTotalGBP"] = f"{element.unit_price_gbp * qty:.2f}"
             out_row["Availability"] = element.availability
         else:
             out_row["UnitPriceGBP"] = ""
@@ -179,9 +179,92 @@ def price_rows(
     return priced_rows
 
 
+def merge_unpriced_duplicates(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Combine rows for the same piece (BLItemNo + ElementId) that weren't found on
+    PAB into a single row with the combined quantity, so the same missing piece
+    isn't listed once per source CSV it appeared in."""
+    merged: list[dict[str, str]] = []
+    groups: dict[tuple[str, str], dict[str, str]] = {}
+
+    for row in rows:
+        if row["Availability"] != "NOT_FOUND_ON_PAB":
+            merged.append(row)
+            continue
+        key = (row["BLItemNo"], row["ElementId"])
+        if key in groups:
+            existing = groups[key]
+            existing["Qty"] = str(int(existing["Qty"]) + int(row["Qty"]))
+        else:
+            new_row = dict(row)
+            groups[key] = new_row
+            merged.append(new_row)
+
+    return merged
+
+
+def aggregate_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Roll every row up by unique piece (BLItemNo + ElementId), summing quantity
+    and line total, for a compact per-part summary CSV."""
+    order: list[tuple[str, str]] = []
+    groups: dict[tuple[str, str], dict[str, str]] = {}
+
+    for row in rows:
+        key = (row["BLItemNo"], row["ElementId"])
+        if key not in groups:
+            order.append(key)
+            groups[key] = {
+                "BLItemNo": row["BLItemNo"],
+                "PartName": row["PartName"],
+                "ColorName": row.get("ColorName", ""),
+                "Qty": 0,
+                "UnitPriceGBP": row["UnitPriceGBP"],
+                "LineTotalGBP": 0.0,
+            }
+        group = groups[key]
+        group["Qty"] += int(row["Qty"])
+        group["LineTotalGBP"] += float(row["LineTotalGBP"]) if row["LineTotalGBP"] else 0.0
+        if not group["UnitPriceGBP"] and row["UnitPriceGBP"]:
+            group["UnitPriceGBP"] = row["UnitPriceGBP"]
+
+    aggregated = []
+    for key in order:
+        group = groups[key]
+        aggregated.append(
+            {
+                "BLItemNo": group["BLItemNo"],
+                "PartName": group["PartName"],
+                "ColorName": group["ColorName"],
+                "Qty": str(group["Qty"]),
+                "UnitPriceGBP": group["UnitPriceGBP"],
+                "LineTotalGBP": f"{group['LineTotalGBP']:.2f}" if group["LineTotalGBP"] else "",
+            }
+        )
+    return aggregated
+
+
+def write_aggregate_csv(rows: list[dict[str, str]], output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    aggregated = aggregate_rows(rows)
+    fieldnames = ["BLItemNo", "PartName", "ColorName", "Qty", "UnitPriceGBP", "LineTotalGBP"]
+
+    total_qty = sum(int(r["Qty"]) for r in aggregated)
+    total_cost = sum(float(r["LineTotalGBP"]) for r in aggregated if r["LineTotalGBP"])
+
+    with output_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(aggregated)
+        writer.writerow({})
+        writer.writerow({"BLItemNo": "TOTAL", "Qty": total_qty, "LineTotalGBP": f"{total_cost:.2f}"})
+
+
 def write_priced_csv(priced_rows: list[dict[str, str]], output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = list(priced_rows[0].keys()) if priced_rows else []
+    fieldnames: list[str] = []
+    for row in priced_rows:
+        for key in row:
+            if key not in fieldnames:
+                fieldnames.append(key)
 
     total_qty = sum(int(r["Qty"]) for r in priced_rows)
     total_cost = sum(float(r["LineTotalGBP"]) for r in priced_rows if r["LineTotalGBP"])
@@ -196,7 +279,7 @@ def write_priced_csv(priced_rows: list[dict[str, str]], output_path: Path) -> No
             {
                 fieldnames[0]: "TOTAL",
                 "Qty": total_qty,
-                "LineTotalGBP": f"{total_cost:.4f}",
+                "LineTotalGBP": f"{total_cost:.2f}",
             }
         )
         writer.writerow(

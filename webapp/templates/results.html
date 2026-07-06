@@ -5,8 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pricing results &mdash; {{ source_name }}</title>
   <link rel="stylesheet" href="/static/style.css" />
+  <script>
+    (function () {
+      var saved = localStorage.getItem("theme");
+      var theme = saved || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
 </head>
 <body>
+  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">
+    <span id="theme-toggle-icon">&#9788;</span>
+    <span id="theme-toggle-label">Dark mode</span>
+  </button>
+
   <main class="page page-wide">
     <div class="results-header">
       <div>
@@ -40,6 +52,7 @@
     </div>
 
     <a class="btn btn-primary" href="/download/{{ token }}">Download priced CSV</a>
+    <a class="btn btn-secondary" href="/download/{{ token }}/aggregate">Download aggregate CSV</a>
 
     <h2>Priced bricks</h2>
     <div class="table-wrap">
@@ -127,5 +140,7 @@
     </form>
     {% endif %}
   </main>
+
+  <script src="/static/app.js"></script>
 </body>
 </html>

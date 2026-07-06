@@ -5,23 +5,55 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>LEGO Pick a Brick Pricer</title>
   <link rel="stylesheet" href="/static/style.css" />
+  <script>
+    (function () {
+      var saved = localStorage.getItem("theme");
+      var theme = saved || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
 </head>
 <body>
+  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">
+    <span id="theme-toggle-icon">&#9788;</span>
+    <span id="theme-toggle-label">Dark mode</span>
+  </button>
+
   <main class="page">
     <h1>LEGO Pick a Brick Pricer</h1>
-    <p class="subtitle">Drag a bricks CSV in to price every part against the official LEGO Pick a Brick site (GBP).</p>
+    <p class="subtitle">Drag in one or more bricks CSVs to price every part against the official LEGO Pick a Brick site (GBP). Set &ldquo;Copies&rdquo; on a CSV to build several of that design (e.g. 3&times; one list and 17&times; another) into a single aggregate total.</p>
 
     {% if error %}
       <div class="banner banner-error">{{ error }}</div>
     {% endif %}
 
+    <div id="client-error" class="banner banner-error hidden"></div>
+
     <form id="upload-form" action="/upload" method="post" enctype="multipart/form-data">
-      <label id="dropzone" for="file-input" class="dropzone">
-        <span class="dropzone-icon">&#128230;</span>
-        <span id="dropzone-text">Drag &amp; drop your CSV here, or click to browse</span>
-        <input id="file-input" type="file" name="file" accept=".csv" required hidden />
-      </label>
-      <button type="submit" class="btn btn-primary">Price this CSV</button>
+      <div id="file-rows" class="file-rows"></div>
+
+      <template id="file-row-template">
+        <div class="file-row">
+          <div class="file-row-main">
+            <label class="dropzone file-row-drop">
+              <span class="dropzone-icon">&#128230;</span>
+              <span class="file-row-text">Drag &amp; drop a CSV here, or click to browse</span>
+              <input type="file" name="files" accept=".csv,text/csv" hidden />
+            </label>
+            <div class="file-row-controls">
+              <label class="multiplier-label">
+                Copies
+                <input type="number" name="multipliers" min="1" step="1" value="1" required />
+              </label>
+              <button type="button" class="btn btn-remove-row" aria-label="Remove this CSV">&times;</button>
+            </div>
+          </div>
+          <div class="file-row-error hidden"></div>
+        </div>
+      </template>
+
+      <button type="button" id="add-file-row" class="btn btn-secondary">+ Add another CSV</button>
+      <button type="submit" class="btn btn-primary">Price these CSVs</button>
     </form>
 
     <div id="loading-overlay" class="overlay hidden">

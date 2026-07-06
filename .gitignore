@@ -9,6 +9,9 @@ venv/
 # Outputs (generated priced CSVs)
 outputs/*.csv
 
+# Input CSVs (local part lists)
+input/
+
 # Env / secrets
 .env
 
