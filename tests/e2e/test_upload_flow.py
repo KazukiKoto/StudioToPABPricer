@@ -95,6 +95,9 @@ def test_copies_stepper_auto_recalculates_without_explicit_button(page, live_ser
 
     assert page.locator(".card-value").first.inner_text() == "11"  # 4+6+1 at 1 copy
 
+    # The Files dropdown is closed by default; open it to reach the stepper.
+    page.click("#batch-dropdown-toggle")
+
     # The "Files" stepper's + button submits on its own -- no separate
     # "recalculate" button should be needed. `expect(...)` polls/retries,
     # since this is now an in-place AJAX update rather than a navigation
@@ -114,6 +117,7 @@ def test_copies_stepper_zero_confirms_and_removes_file(page, live_server):
     page.click('button[type="submit"]', timeout=60000)
     page.wait_for_selector(".summary-cards", timeout=60000)
 
+    page.click("#batch-dropdown-toggle")  # closed by default
     assert page.locator(".batch-file").count() == 2
 
     page.click(".batch-file:has-text('other.csv') .stepper-minus")
@@ -137,6 +141,7 @@ def test_copies_stepper_zero_via_x_button_removes_file(page, live_server):
     page.click('button[type="submit"]', timeout=60000)
     page.wait_for_selector(".summary-cards", timeout=60000)
 
+    page.click("#batch-dropdown-toggle")  # closed by default
     page.click(".batch-file:has-text('other.csv') .batch-file-remove")
     page.wait_for_selector("#confirm-modal:not(.hidden)")
     page.click("#confirm-modal-confirm")
@@ -152,6 +157,7 @@ def test_copies_stepper_zero_cancelled_reverts_value(page, live_server):
     page.click('button[type="submit"]', timeout=60000)
     page.wait_for_selector(".summary-cards", timeout=60000)
 
+    page.click("#batch-dropdown-toggle")  # closed by default
     page.click(".batch-file .stepper-minus")  # 1 -> 0 triggers the in-page confirm modal
     page.wait_for_selector("#confirm-modal:not(.hidden)")
     page.click("#confirm-modal-cancel")
@@ -174,6 +180,9 @@ def test_manual_price_survives_copies_change(page, live_server):
     page.wait_for_selector(".banner-info")
     assert page.locator(".card-value").nth(1).inner_text() == "£0.81"  # 0.66 + 1*0.15
 
+    # "Accept prices & recalculate" is a full page reload, so the dropdown
+    # is back to closed-by-default; open it to reach the stepper.
+    page.click("#batch-dropdown-toggle")
     page.click("#copies-form .stepper-plus")  # 1 -> 2 copies
 
     # Found parts double to £1.32, plus the manual price rescaling to 2*0.15=0.30 -> £1.62
@@ -181,20 +190,69 @@ def test_manual_price_survives_copies_change(page, live_server):
     assert page.locator(".badge-manual").count() == 1
 
 
-def test_add_more_csvs_from_results_page(page, live_server):
+def test_add_csv_widget_replaces_button_with_row_and_auto_submits(page, live_server):
+    """"+ Add CSV" swaps itself in place for a single dropzone/stepper/x row
+    (no "add another"/"add to batch" buttons); choosing a valid file there
+    submits immediately."""
     page.goto(live_server)
     page.wait_for_selector("#file-rows .file-row")
     page.locator('input[type="file"]').first.set_input_files(str(FIXTURES_DIR / "simple.csv"))
     page.click('button[type="submit"]', timeout=60000)
     page.wait_for_selector(".summary-cards", timeout=60000)
 
+    page.click("#batch-dropdown-toggle")  # closed by default
+    expect(page.locator("#add-csv-toggle")).to_be_visible()
+    expect(page.locator("#add-csv-form")).to_be_hidden()
+
     page.click("#add-csv-toggle")
-    page.wait_for_selector("#file-rows .file-row")
-    page.locator('#file-rows input[type="file"]').first.set_input_files(str(FIXTURES_DIR / "other.csv"))
-    page.click('#add-files-form button[type="submit"]', timeout=60000)
+    expect(page.locator("#add-csv-toggle")).to_be_hidden()
+    expect(page.locator("#add-csv-form")).to_be_visible()
+
+    page.locator("#add-csv-row input[type=\"file\"]").set_input_files(str(FIXTURES_DIR / "other.csv"))
 
     expect(page.locator(".batch-file")).to_have_count(2)
     assert "3024" in page.content()  # other.csv's part is now present
+
+    # After a successful add, the whole batch panel re-renders fresh, so the
+    # widget is back to showing the "+ Add CSV" button.
+    page.click("#batch-dropdown-toggle")
+    expect(page.locator("#add-csv-toggle")).to_be_visible()
+
+
+def test_add_csv_widget_x_button_cancels_back_to_button(page, live_server):
+    page.goto(live_server)
+    page.wait_for_selector("#file-rows .file-row")
+    page.locator('input[type="file"]').first.set_input_files(str(FIXTURES_DIR / "simple.csv"))
+    page.click('button[type="submit"]', timeout=60000)
+    page.wait_for_selector(".summary-cards", timeout=60000)
+
+    page.click("#batch-dropdown-toggle")
+    page.click("#add-csv-toggle")
+    expect(page.locator("#add-csv-form")).to_be_visible()
+
+    page.click("#add-csv-cancel")
+    expect(page.locator("#add-csv-form")).to_be_hidden()
+    expect(page.locator("#add-csv-toggle")).to_be_visible()
+    # Cancelling must not have added anything or sent any request.
+    assert page.locator(".batch-file").count() == 1
+
+
+def test_info_banner_auto_dismisses(page, live_server):
+    """The "Added N file(s)."/"Removed x.csv." confirmations are transient,
+    not something to act on -- they should fade away on their own rather
+    than sit on the page permanently."""
+    page.goto(live_server)
+    page.wait_for_selector("#file-rows .file-row")
+    page.locator('input[type="file"]').first.set_input_files(str(FIXTURES_DIR / "simple.csv"))
+    page.click('button[type="submit"]', timeout=60000)
+    page.wait_for_selector(".summary-cards", timeout=60000)
+
+    page.click("#batch-dropdown-toggle")
+    page.click("#add-csv-toggle")
+    page.locator('#add-csv-row input[type="file"]').set_input_files(str(FIXTURES_DIR / "other.csv"))
+    page.wait_for_selector(".banner-info")
+
+    expect(page.locator(".banner-info")).to_be_hidden(timeout=6000)
 
 
 def test_copies_update_does_not_reload_the_page(page, live_server):
@@ -207,6 +265,7 @@ def test_copies_update_does_not_reload_the_page(page, live_server):
     page.click('button[type="submit"]', timeout=60000)
     page.wait_for_selector(".summary-cards", timeout=60000)
 
+    page.click("#batch-dropdown-toggle")  # closed by default
     page.evaluate("window.__noReloadMarker = 'still-here'")
     page.click("#copies-form .stepper-plus")
     expect(page.locator(".card-value").first).to_have_text("22")
@@ -221,17 +280,17 @@ def test_files_dropdown_can_collapse_and_expand(page, live_server):
     page.click('button[type="submit"]', timeout=60000)
     page.wait_for_selector(".summary-cards", timeout=60000)
 
-    # Open by default.
-    assert page.locator("#batch-dropdown-toggle").get_attribute("aria-expanded") == "true"
-    expect(page.locator(".batch-file").first).to_be_visible()
-
-    page.click("#batch-dropdown-toggle")
+    # Closed by default.
     assert page.locator("#batch-dropdown-toggle").get_attribute("aria-expanded") == "false"
     expect(page.locator("#batch-dropdown-panel")).to_be_hidden()
 
     page.click("#batch-dropdown-toggle")
     assert page.locator("#batch-dropdown-toggle").get_attribute("aria-expanded") == "true"
     expect(page.locator(".batch-file").first).to_be_visible()
+
+    page.click("#batch-dropdown-toggle")
+    assert page.locator("#batch-dropdown-toggle").get_attribute("aria-expanded") == "false"
+    expect(page.locator("#batch-dropdown-panel")).to_be_hidden()
 
 
 def test_dark_mode_toggle_persists(page, live_server):

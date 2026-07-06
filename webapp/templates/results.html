@@ -20,7 +20,7 @@
       </div>
       <div class="results-header-actions">
         <a class="btn btn-secondary" href="/">Back to upload</a>
-        <button id="theme-toggle" class="theme-toggle theme-toggle-inline" type="button" aria-label="Toggle dark mode">
+        <button id="theme-toggle" class="btn btn-secondary theme-toggle" type="button" aria-label="Toggle dark mode">
           <span id="theme-toggle-icon">&#9788;</span>
           <span id="theme-toggle-label">Dark mode</span>
         </button>
@@ -68,13 +68,13 @@
         type="button"
         id="batch-dropdown-toggle"
         class="batch-dropdown-toggle"
-        aria-expanded="true"
+        aria-expanded="false"
         aria-controls="batch-dropdown-panel"
       >
         <span>Files ({{ files|length }})</span>
         <span class="batch-dropdown-arrow" aria-hidden="true">&#9662;</span>
       </button>
-      <div id="batch-dropdown-panel" class="batch-dropdown-panel">
+      <div id="batch-dropdown-panel" class="batch-dropdown-panel collapsed">
         <form id="copies-form" action="/session/{{ token }}/copies" method="post">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
           <div class="batch-files-scroll">
@@ -105,41 +105,32 @@
           </div>
         </form>
 
-        <button type="button" id="add-csv-toggle" class="btn btn-secondary batch-add-csv-btn" aria-expanded="false" aria-controls="add-files-inline">
-          + Add CSV
-        </button>
+        <div class="add-csv-slot">
+          <button type="button" id="add-csv-toggle" class="btn btn-secondary batch-add-csv-btn">+ Add CSV</button>
 
-        <div id="add-files-inline" class="add-files-inline hidden">
-          <form id="add-files-form" action="/session/{{ token }}/add-files" method="post" enctype="multipart/form-data">
+          <form id="add-csv-form" action="/session/{{ token }}/add-files" method="post" enctype="multipart/form-data" class="hidden">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <div id="file-rows" class="file-rows"></div>
-
-            <template id="file-row-template">
-              <div class="file-row">
-                <div class="file-row-main">
-                  <label class="dropzone file-row-drop">
-                    <span class="dropzone-icon">&#128230;</span>
-                    <span class="file-row-text">Drag &amp; drop a CSV here, or click to browse</span>
-                    <input type="file" name="files" accept=".csv,text/csv" hidden />
-                  </label>
-                  <div class="file-row-controls">
-                    <div class="multiplier-label">
-                      <span class="multiplier-label-text">Copies</span>
-                      <div class="stepper">
-                        <button type="button" class="stepper-btn stepper-minus" aria-label="Decrease copies">&minus;</button>
-                        <input type="number" name="multipliers" min="1" max="{{ max_multiplier }}" step="1" value="1" required aria-label="Copies" />
-                        <button type="button" class="stepper-btn stepper-plus" aria-label="Increase copies">&plus;</button>
-                      </div>
+            <div class="file-row" id="add-csv-row">
+              <div class="file-row-main">
+                <label class="dropzone file-row-drop">
+                  <span class="dropzone-icon">&#128230;</span>
+                  <span class="file-row-text">Drag &amp; drop a CSV here, or click to browse</span>
+                  <input type="file" name="files" accept=".csv,text/csv" hidden />
+                </label>
+                <div class="file-row-controls">
+                  <div class="multiplier-label">
+                    <span class="multiplier-label-text">Copies</span>
+                    <div class="stepper">
+                      <button type="button" class="stepper-btn stepper-minus" aria-label="Decrease copies">&minus;</button>
+                      <input type="number" name="multipliers" min="1" max="{{ max_multiplier }}" step="1" value="1" aria-label="Copies" />
+                      <button type="button" class="stepper-btn stepper-plus" aria-label="Increase copies">&plus;</button>
                     </div>
-                    <button type="button" class="btn btn-remove-row" aria-label="Remove this CSV">&times;</button>
                   </div>
+                  <button type="button" id="add-csv-cancel" class="btn btn-remove-row" aria-label="Cancel adding a CSV">&times;</button>
                 </div>
-                <div class="file-row-error hidden"></div>
               </div>
-            </template>
-
-            <button type="button" id="add-file-row" class="btn btn-secondary">+ Add another CSV</button>
-            <button type="submit" class="btn btn-primary">Add to batch</button>
+              <div class="file-row-error hidden"></div>
+            </div>
           </form>
         </div>
       </div>

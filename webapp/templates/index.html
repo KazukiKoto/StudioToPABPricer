@@ -9,16 +9,21 @@
   <script src="/static/theme-init.js"></script>
 </head>
 <body>
-  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">
-    <span id="theme-toggle-icon">&#9788;</span>
-    <span id="theme-toggle-label">Dark mode</span>
-  </button>
-
   <main class="page">
-    <div class="studs" aria-hidden="true">
-      <span class="stud"></span><span class="stud"></span><span class="stud"></span><span class="stud"></span>
+    <div class="page-header">
+      <div>
+        <div class="studs" aria-hidden="true">
+          <span class="stud"></span><span class="stud"></span><span class="stud"></span><span class="stud"></span>
+        </div>
+        <h1>Pick a Brick <span class="highlight">Pricer</span></h1>
+      </div>
+      <div class="page-header-actions">
+        <button id="theme-toggle" class="btn btn-secondary theme-toggle" type="button" aria-label="Toggle dark mode">
+          <span id="theme-toggle-icon">&#9788;</span>
+          <span id="theme-toggle-label">Dark mode</span>
+        </button>
+      </div>
     </div>
-    <h1>Pick a Brick <span class="highlight">Pricer</span></h1>
     <p class="subtitle">Drag in one or more bricks CSVs to price every part against the official LEGO Pick a Brick site (GBP). Set &ldquo;Copies&rdquo; on a CSV to build several of that design (e.g. 3&times; one list and 17&times; another) into a single aggregate total.</p>
 
     {% if error %}

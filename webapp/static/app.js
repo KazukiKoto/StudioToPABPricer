@@ -49,6 +49,19 @@ function initMainContent() {
   const overlay = document.getElementById("loading-overlay");
   const clientError = document.getElementById("client-error");
 
+  // Informational banners (e.g. "Added 1 file(s).", "Removed other.csv.")
+  // are transient confirmations, not something the user needs to act on --
+  // auto-dismiss them after a few seconds instead of leaving them up
+  // forever. Error banners are left alone: those need the user to fix
+  // something, so they should stay until the next action clears them.
+  const infoBanner = document.querySelector(".banner-info");
+  if (infoBanner) {
+    setTimeout(() => {
+      infoBanner.classList.add("fading");
+      infoBanner.addEventListener("transitionend", () => infoBanner.classList.add("hidden"), { once: true });
+    }, 4000);
+  }
+
   const DEFAULT_ROW_TEXT = "Drag & drop a CSV here, or click to browse";
 
   function isCsvFile(file) {
@@ -258,18 +271,6 @@ function initMainContent() {
     });
   }
 
-  const addFilesForm = document.getElementById("add-files-form");
-  if (addFilesForm) {
-    addFilesForm.addEventListener("submit", (e) => {
-      e.preventDefault();
-      if (!validateFileRows()) {
-        showClientError("Please fix the highlighted CSV(s) before adding them.");
-        return;
-      }
-      submitViaAjax(addFilesForm);
-    });
-  }
-
   // ---- "Files" dropdown open/close ----
   const batchToggle = document.getElementById("batch-dropdown-toggle");
   const batchPanel = document.getElementById("batch-dropdown-panel");
@@ -281,14 +282,87 @@ function initMainContent() {
     });
   }
 
-  // ---- "+ Add CSV" reveals the inline uploader ----
+  // ---- "+ Add CSV": replaces itself in place with a single dropzone +
+  // copies stepper + cancel ("x") button. Choosing/dropping a valid file
+  // submits immediately -- there's no separate "add another"/"submit"
+  // button here, unlike the multi-file widget on the upload page. ----
   const addCsvToggle = document.getElementById("add-csv-toggle");
-  const addFilesInline = document.getElementById("add-files-inline");
-  if (addCsvToggle && addFilesInline) {
-    addCsvToggle.addEventListener("click", () => {
-      const isHidden = addFilesInline.classList.contains("hidden");
-      addFilesInline.classList.toggle("hidden", !isHidden);
-      addCsvToggle.setAttribute("aria-expanded", String(isHidden));
+  const addCsvForm = document.getElementById("add-csv-form");
+  const addCsvRow = document.getElementById("add-csv-row");
+  if (addCsvToggle && addCsvForm && addCsvRow) {
+    const addCsvInput = addCsvRow.querySelector('input[type="file"]');
+    const addCsvDrop = addCsvRow.querySelector(".file-row-drop");
+    const addCsvMultiplier = addCsvRow.querySelector('input[name="multipliers"]');
+    const addCsvMinus = addCsvRow.querySelector(".stepper-minus");
+    const addCsvPlus = addCsvRow.querySelector(".stepper-plus");
+
+    function resetAddCsvRow() {
+      addCsvInput.value = "";
+      addCsvRow.querySelector(".file-row-text").textContent = DEFAULT_ROW_TEXT;
+      addCsvMultiplier.value = 1;
+      clearRowError(addCsvRow);
+    }
+
+    function showAddCsvButton() {
+      addCsvForm.classList.add("hidden");
+      addCsvToggle.classList.remove("hidden");
+      resetAddCsvRow();
+    }
+
+    function showAddCsvRow() {
+      addCsvToggle.classList.add("hidden");
+      addCsvForm.classList.remove("hidden");
+    }
+
+    addCsvToggle.addEventListener("click", showAddCsvRow);
+    addCsvRow.querySelector("#add-csv-cancel").addEventListener("click", showAddCsvButton);
+
+    addCsvForm.addEventListener("submit", (e) => e.preventDefault());
+
+    addCsvMinus.addEventListener("click", () => {
+      const min = parseInt(addCsvMultiplier.min, 10) || 1;
+      const current = parseInt(addCsvMultiplier.value, 10) || min;
+      addCsvMultiplier.value = Math.max(min, current - 1);
+    });
+    addCsvPlus.addEventListener("click", () => {
+      const max = parseInt(addCsvMultiplier.max, 10) || Infinity;
+      const current = parseInt(addCsvMultiplier.value, 10) || 1;
+      addCsvMultiplier.value = Math.min(max, current + 1);
+    });
+
+    function trySubmitAddCsv(file) {
+      if (!isCsvFile(file)) {
+        showRowError(addCsvRow, `"${file.name}" isn't a .csv file.`);
+        return;
+      }
+      clearRowError(addCsvRow);
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      addCsvInput.files = dt.files;
+      submitViaAjax(addCsvForm);
+    }
+
+    addCsvInput.addEventListener("change", () => {
+      if (addCsvInput.files.length) trySubmitAddCsv(addCsvInput.files[0]);
+    });
+
+    ["dragenter", "dragover"].forEach((evt) =>
+      addCsvDrop.addEventListener(evt, (e) => {
+        e.preventDefault();
+        addCsvDrop.classList.add("dragover");
+      })
+    );
+    ["dragleave", "drop"].forEach((evt) =>
+      addCsvDrop.addEventListener(evt, (e) => {
+        e.preventDefault();
+        addCsvDrop.classList.remove("dragover");
+      })
+    );
+    addCsvDrop.addEventListener("drop", (e) => {
+      const files = Array.from(e.dataTransfer.files || []);
+      if (!files.length) return;
+      // Single-slot widget: only the first dropped file is used.
+      trySubmitAddCsv(files[0]);
     });
   }
 

@@ -61,7 +61,12 @@ html[data-theme="dark"] {
 
 * { box-sizing: border-box; }
 
-.hidden { display: none; }
+/* !important is deliberate: this utility class's entire job is to force an
+   element hidden regardless of any other display rule that might apply to
+   it (e.g. .btn's display:inline-block, at equal specificity, defined later
+   in this file -- without !important that combination silently wins and
+   the "hidden" element stays visible). */
+.hidden { display: none !important; }
 
 body {
   font-family: "Segoe UI", -apple-system, Roboto, Helvetica, Arial, sans-serif;
@@ -126,36 +131,13 @@ h2 {
 }
 .subtitle { color: var(--muted); margin-top: 0; }
 
+/* Same chunky look as the other buttons (.btn.btn-secondary supplies the
+   border/shadow/hover/active); this just lays out the icon + label. */
 .theme-toggle {
-  position: fixed;
-  top: 1rem;
-  right: 1rem;
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  background: var(--bg-elevated);
-  border: 2px solid var(--edge);
-  color: var(--ink);
-  border-radius: 999px;
-  padding: 0.45rem 0.9rem;
   font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 3px 3px 0 var(--pop);
-  z-index: 20;
-  transition: transform 0.1s, box-shadow 0.1s;
-}
-.theme-toggle:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--pop); }
-.theme-toggle:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--pop); }
-
-/* Results page: sits inline next to "Back to upload" instead of floating
-   fixed in the corner. */
-.theme-toggle-inline {
-  position: static;
-  top: auto;
-  right: auto;
-  z-index: auto;
-  margin-top: 1rem;
 }
 
 .banner {
@@ -165,7 +147,9 @@ h2 {
   box-shadow: 3px 3px 0 var(--pop-soft);
   margin: 1rem 0;
   font-weight: 600;
+  transition: opacity 0.4s ease;
 }
+.banner.fading { opacity: 0; }
 .banner-error { background: var(--error-bg); color: var(--error); border-color: var(--error); }
 .banner-info { background: var(--info-bg); color: var(--info); border-color: var(--info); }
 
@@ -220,8 +204,6 @@ h2 {
   font-size: 0.85rem;
   padding: 0 0.25rem;
 }
-.file-row-error.hidden { display: none; }
-
 .file-row-drop {
   flex: 1;
   padding: 1.25rem 1rem;
@@ -300,7 +282,7 @@ h2 {
   margin: 0;
 }
 
-.batch-dropdown { margin-bottom: 1.5rem; }
+.batch-dropdown { margin-top: 1.5rem; margin-bottom: 1.5rem; }
 
 .batch-dropdown-toggle {
   display: flex;
@@ -323,7 +305,16 @@ h2 {
 .batch-dropdown-toggle:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--pop); }
 .batch-dropdown-arrow { transition: transform 0.15s; font-size: 0.8rem; }
 .batch-dropdown-toggle[aria-expanded="false"] .batch-dropdown-arrow { transform: rotate(-90deg); }
-.batch-dropdown-toggle[aria-expanded="false"] { box-shadow: none; }
+/* When open, the toggle sits flush above the panel -- it must lose its own
+   bottom-right hard shadow (otherwise that shadow cuts across the panel's
+   top edge) and square off its bottom corners to match the panel's square
+   top corners, or the two boxes' outlines visibly jog at the seam instead
+   of reading as one continuous shape. */
+.batch-dropdown-toggle[aria-expanded="true"] {
+  box-shadow: none;
+  border-radius: 12px 12px 0 0;
+}
+.batch-dropdown-toggle[aria-expanded="true"]:hover { transform: none; box-shadow: none; }
 
 .batch-dropdown-panel {
   border: 3px solid var(--edge);
@@ -361,10 +352,10 @@ h2 {
   font-weight: 600;
 }
 
-.batch-add-csv-btn { margin-top: 1rem; }
-
-.add-files-inline { margin-top: 1rem; }
-.add-files-inline.hidden { display: none; }
+.add-csv-slot { margin-top: 1rem; }
+.batch-add-csv-btn { margin-top: 0; }
+#add-csv-form { margin-top: 0; }
+#add-csv-form .file-row { margin: 0; }
 
 .btn.btn-remove-row {
   display: inline-flex;
@@ -463,7 +454,6 @@ h2 {
   overflow: hidden;
   z-index: 5;
 }
-.split-btn-menu.hidden { display: none; }
 .split-btn-menu a {
   display: block;
   padding: 0.65rem 1rem;
@@ -490,7 +480,6 @@ h2 {
   text-align: center;
   padding: 0 1.5rem;
 }
-.overlay.hidden { display: none; }
 .overlay p { font-weight: 600; max-width: 380px; }
 .spinner {
   width: 52px;
@@ -502,7 +491,8 @@ h2 {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.results-header {
+.results-header,
+.page-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -510,7 +500,8 @@ h2 {
   flex-wrap: wrap;
 }
 
-.results-header-actions {
+.results-header-actions,
+.page-header-actions {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -558,6 +549,32 @@ h2 {
   overflow-y: auto;
   /* Makes .table-wrap itself the scrolling ancestor, so thead's
      position:sticky actually has something to stick to. */
+}
+
+/* Themed scrollbar for the bounded-height panels (tables + batch file
+   list), instead of the bare OS-default one. */
+.table-scroll,
+.batch-files-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--edge) var(--bg-card);
+}
+.table-scroll::-webkit-scrollbar,
+.batch-files-scroll::-webkit-scrollbar {
+  width: 12px;
+}
+.table-scroll::-webkit-scrollbar-track,
+.batch-files-scroll::-webkit-scrollbar-track {
+  background: var(--bg-card);
+}
+.table-scroll::-webkit-scrollbar-thumb,
+.batch-files-scroll::-webkit-scrollbar-thumb {
+  background-color: var(--edge);
+  border-radius: 8px;
+  border: 3px solid var(--bg-card);
+}
+.table-scroll::-webkit-scrollbar-thumb:hover,
+.batch-files-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: var(--brick-red);
 }
 table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
 th, td { text-align: left; padding: 0.65rem 0.9rem; border-bottom: 2px solid var(--border); white-space: nowrap; }
@@ -607,7 +624,6 @@ input[type="number"] {
   z-index: 30;
   padding: 1rem;
 }
-.modal-overlay.hidden { display: none; }
 .modal-box {
   background: var(--bg-elevated);
   border: 3px solid var(--edge);
