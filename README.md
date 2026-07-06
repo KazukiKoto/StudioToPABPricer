@@ -8,9 +8,13 @@ on the host's Python version.
 
 ## Screenshots
 
-| Upload | Results |
-| --- | --- |
-| ![Upload page](docs/screenshots/input.png) | ![Results page](docs/screenshots/results.png) |
+Upload one or more CSVs, with a "Copies" count per file:
+
+![Upload page](docs/screenshots/input.png)
+
+Priced results, with a "not found" table for manual pricing and a download dropdown:
+
+![Results page](docs/screenshots/results.png)
 
 ## Quick start (Docker, recommended)
 
