@@ -5,3 +5,8 @@ services:
       - "8000:8000"
     volumes:
       - ./outputs:/app/outputs
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M

@@ -6,13 +6,7 @@
   <title>LEGO Pick a Brick Pricer</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%B1%3C/text%3E%3C/svg%3E" />
   <link rel="stylesheet" href="/static/style.css" />
-  <script>
-    (function () {
-      var saved = localStorage.getItem("theme");
-      var theme = saved || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-      document.documentElement.setAttribute("data-theme", theme);
-    })();
-  </script>
+  <script src="/static/theme-init.js"></script>
 </head>
 <body>
   <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">
@@ -34,6 +28,7 @@
     <div id="client-error" class="banner banner-error hidden"></div>
 
     <form id="upload-form" action="/upload" method="post" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
       <div id="file-rows" class="file-rows"></div>
 
       <template id="file-row-template">
@@ -49,7 +44,7 @@
                 <span class="multiplier-label-text">Copies</span>
                 <div class="stepper">
                   <button type="button" class="stepper-btn stepper-minus" aria-label="Decrease copies">&minus;</button>
-                  <input type="number" name="multipliers" min="1" step="1" value="1" required aria-label="Copies" />
+                  <input type="number" name="multipliers" min="1" max="{{ max_multiplier }}" step="1" value="1" required aria-label="Copies" />
                   <button type="button" class="stepper-btn stepper-plus" aria-label="Increase copies">&plus;</button>
                 </div>
               </div>

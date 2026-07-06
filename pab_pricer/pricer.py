@@ -144,16 +144,23 @@ def price_rows(
     locale: str = "en-gb",
     delay: float = 0.5,
     progress_callback=None,
+    fetcher=None,
 ) -> list[dict[str, str]]:
     """Fetch prices for each row's ElementId, grouping requests by part number so
-    each distinct LEGO part is only looked up once."""
+    each distinct LEGO part is only looked up once.
+
+    `fetcher` defaults to `fetch_part_siblings` (looked up at call time, not bound
+    at import time) so tests can monkeypatch the module-level function without
+    needing every caller to pass one explicitly.
+    """
+    fetch = fetcher or fetch_part_siblings
     cache: dict[str, dict[str, ElementPrice]] = {}
     priced_rows: list[dict[str, str]] = []
 
     part_numbers = sorted({row["BLItemNo"] for row in rows})
     for i, part_number in enumerate(part_numbers):
         try:
-            cache[part_number] = fetch_part_siblings(part_number, locale=locale)
+            cache[part_number] = fetch(part_number, locale=locale)
         except PabPriceFetchError:
             cache[part_number] = {}
         if progress_callback:

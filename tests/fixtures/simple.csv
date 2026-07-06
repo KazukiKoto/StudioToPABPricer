@@ -1,0 +1,4 @@
+BLItemNo,ElementId,LdrawId,PartName,BLColorId,LDrawColorId,ColorName,ColorCategory,Qty,Weight
+3005,4211389,3005.dat,Brick 1 x 1,86,71,Light Bluish Gray,Solid Colors,4,0.44
+3023,302326,3023b.dat,Plate 1 x 2,11,0,Black,Solid Colors,6,0.36
+3867,4251286,3867.dat,Baseplate 16 x 16,86,71,Light Bluish Gray,Solid Colors,1,

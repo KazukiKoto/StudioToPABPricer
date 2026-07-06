@@ -1,0 +1,7 @@
+# Test/dev-only dependencies. Install with: make install-dev
+-r requirements.txt
+
+pytest>=8.0
+httpx>=0.27          # needed for FastAPI's TestClient
+pytest-playwright>=0.5
+pip-audit>=2.7

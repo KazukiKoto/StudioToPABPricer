@@ -6,20 +6,9 @@
   <title>Pricing results &mdash; {{ source_name }}</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%B1%3C/text%3E%3C/svg%3E" />
   <link rel="stylesheet" href="/static/style.css" />
-  <script>
-    (function () {
-      var saved = localStorage.getItem("theme");
-      var theme = saved || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-      document.documentElement.setAttribute("data-theme", theme);
-    })();
-  </script>
+  <script src="/static/theme-init.js"></script>
 </head>
 <body>
-  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">
-    <span id="theme-toggle-icon">&#9788;</span>
-    <span id="theme-toggle-label">Dark mode</span>
-  </button>
-
   <main class="page page-wide">
     <div class="results-header">
       <div>
@@ -29,12 +18,20 @@
         <h1>Pricing <span class="highlight">results</span></h1>
         <p class="subtitle">{{ source_name }}</p>
       </div>
-      <a class="btn btn-secondary" href="/">Upload another file</a>
+      <div class="results-header-actions">
+        <a class="btn btn-secondary" href="/">Back to upload</a>
+        <button id="theme-toggle" class="theme-toggle theme-toggle-inline" type="button" aria-label="Toggle dark mode">
+          <span id="theme-toggle-icon">&#9788;</span>
+          <span id="theme-toggle-label">Dark mode</span>
+        </button>
+      </div>
     </div>
 
     {% if message %}
       <div class="banner banner-info">{{ message }}</div>
     {% endif %}
+
+    <div id="client-error" class="banner banner-error hidden"></div>
 
     <div class="summary-cards">
       <div class="card">
@@ -66,8 +63,90 @@
       </div>
     </div>
 
+    <div class="batch-dropdown">
+      <button
+        type="button"
+        id="batch-dropdown-toggle"
+        class="batch-dropdown-toggle"
+        aria-expanded="true"
+        aria-controls="batch-dropdown-panel"
+      >
+        <span>Files ({{ files|length }})</span>
+        <span class="batch-dropdown-arrow" aria-hidden="true">&#9662;</span>
+      </button>
+      <div id="batch-dropdown-panel" class="batch-dropdown-panel">
+        <form id="copies-form" action="/session/{{ token }}/copies" method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+          <div class="batch-files-scroll">
+            {% for idx, file in files %}
+            <div class="batch-file">
+              <span class="batch-file-name">{{ file.name }}</span>
+              <div class="stepper" data-auto-submit="true" data-filename="{{ file.name }}">
+                <button type="button" class="stepper-btn stepper-minus" aria-label="Decrease copies of {{ file.name }}">&minus;</button>
+                <input
+                  type="number"
+                  name="copies_{{ idx }}"
+                  min="0"
+                  max="{{ max_multiplier }}"
+                  step="1"
+                  value="{{ file.multiplier }}"
+                  aria-label="Copies of {{ file.name }}"
+                />
+                <button type="button" class="stepper-btn stepper-plus" aria-label="Increase copies of {{ file.name }}">&plus;</button>
+              </div>
+              <button
+                type="button"
+                class="btn btn-remove-row batch-file-remove"
+                data-filename="{{ file.name }}"
+                aria-label="Remove {{ file.name }}"
+              >&times;</button>
+            </div>
+            {% endfor %}
+          </div>
+        </form>
+
+        <button type="button" id="add-csv-toggle" class="btn btn-secondary batch-add-csv-btn" aria-expanded="false" aria-controls="add-files-inline">
+          + Add CSV
+        </button>
+
+        <div id="add-files-inline" class="add-files-inline hidden">
+          <form id="add-files-form" action="/session/{{ token }}/add-files" method="post" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <div id="file-rows" class="file-rows"></div>
+
+            <template id="file-row-template">
+              <div class="file-row">
+                <div class="file-row-main">
+                  <label class="dropzone file-row-drop">
+                    <span class="dropzone-icon">&#128230;</span>
+                    <span class="file-row-text">Drag &amp; drop a CSV here, or click to browse</span>
+                    <input type="file" name="files" accept=".csv,text/csv" hidden />
+                  </label>
+                  <div class="file-row-controls">
+                    <div class="multiplier-label">
+                      <span class="multiplier-label-text">Copies</span>
+                      <div class="stepper">
+                        <button type="button" class="stepper-btn stepper-minus" aria-label="Decrease copies">&minus;</button>
+                        <input type="number" name="multipliers" min="1" max="{{ max_multiplier }}" step="1" value="1" required aria-label="Copies" />
+                        <button type="button" class="stepper-btn stepper-plus" aria-label="Increase copies">&plus;</button>
+                      </div>
+                    </div>
+                    <button type="button" class="btn btn-remove-row" aria-label="Remove this CSV">&times;</button>
+                  </div>
+                </div>
+                <div class="file-row-error hidden"></div>
+              </div>
+            </template>
+
+            <button type="button" id="add-file-row" class="btn btn-secondary">+ Add another CSV</button>
+            <button type="submit" class="btn btn-primary">Add to batch</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
     <h2>Priced bricks</h2>
-    <div class="table-wrap">
+    <div class="table-wrap table-scroll">
       <table>
         <thead>
           <tr>
@@ -103,7 +182,8 @@
     <p class="subtitle">These parts/colours weren&rsquo;t matched on the official site (often discontinued colours). Enter a manual unit price (GBP) to accept it into the total, then recalculate.</p>
 
     <form action="/finalize/{{ token }}" method="post">
-      <div class="table-wrap">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+      <div class="table-wrap table-scroll">
         <table>
           <thead>
             <tr>
@@ -151,7 +231,22 @@
       <button type="submit" class="btn btn-primary">Accept prices &amp; recalculate</button>
     </form>
     {% endif %}
+
+    <div id="loading-overlay" class="overlay hidden">
+      <div class="spinner"></div>
+      <p>Pricing bricks against LEGO.com&hellip; this can take a little while for large lists.</p>
+    </div>
   </main>
+
+  <div id="confirm-modal" class="modal-overlay hidden">
+    <div class="modal-box" role="alertdialog" aria-modal="true" aria-labelledby="confirm-modal-message">
+      <p id="confirm-modal-message"></p>
+      <div class="modal-actions">
+        <button type="button" id="confirm-modal-cancel" class="btn btn-secondary">Cancel</button>
+        <button type="button" id="confirm-modal-confirm" class="btn btn-primary">Remove</button>
+      </div>
+    </div>
+  </div>
 
   <script src="/static/app.js"></script>
 </body>

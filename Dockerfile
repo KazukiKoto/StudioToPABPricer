@@ -14,7 +14,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN mkdir -p outputs
+RUN mkdir -p outputs \
+    && useradd --create-home --shell /usr/sbin/nologin appuser \
+    && chown -R appuser:appuser /app \
+    && chmod 777 outputs
+# outputs/ is world-writable so it still works if docker-compose bind-mounts a
+# host directory owned by a different uid than the container's appuser.
+USER appuser
 
 EXPOSE 8000
 

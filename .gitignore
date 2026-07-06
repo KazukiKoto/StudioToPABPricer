@@ -5,12 +5,16 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
+.pytest_cache/
 
 # Outputs (generated priced CSVs)
 outputs/*.csv
 
 # Input CSVs (local part lists)
 input/
+
+# Planning docs (local working notes, not part of the shipped project)
+plan/
 
 # Env / secrets
 .env

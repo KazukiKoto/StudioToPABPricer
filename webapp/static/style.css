@@ -148,6 +148,16 @@ h2 {
 .theme-toggle:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--pop); }
 .theme-toggle:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--pop); }
 
+/* Results page: sits inline next to "Back to upload" instead of floating
+   fixed in the corner. */
+.theme-toggle-inline {
+  position: static;
+  top: auto;
+  right: auto;
+  z-index: auto;
+  margin-top: 1rem;
+}
+
 .banner {
   padding: 0.75rem 1rem;
   border-radius: 8px;
@@ -289,6 +299,72 @@ h2 {
   -webkit-appearance: none;
   margin: 0;
 }
+
+.batch-dropdown { margin-bottom: 1.5rem; }
+
+.batch-dropdown-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  border: 3px solid var(--edge);
+  border-radius: 12px;
+  background: var(--bg-card);
+  color: var(--ink);
+  box-shadow: 4px 4px 0 var(--pop);
+  padding: 0.75rem 1.1rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.batch-dropdown-toggle:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--pop); }
+.batch-dropdown-arrow { transition: transform 0.15s; font-size: 0.8rem; }
+.batch-dropdown-toggle[aria-expanded="false"] .batch-dropdown-arrow { transform: rotate(-90deg); }
+.batch-dropdown-toggle[aria-expanded="false"] { box-shadow: none; }
+
+.batch-dropdown-panel {
+  border: 3px solid var(--edge);
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  background: var(--bg-card);
+  box-shadow: 4px 4px 0 var(--pop);
+  padding: 1rem;
+}
+.batch-dropdown-panel.collapsed { display: none; }
+
+.batch-files-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+.batch-file {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 2px solid var(--edge);
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
+  background: var(--bg-elevated);
+}
+.batch-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.batch-add-csv-btn { margin-top: 1rem; }
+
+.add-files-inline { margin-top: 1rem; }
+.add-files-inline.hidden { display: none; }
 
 .btn.btn-remove-row {
   display: inline-flex;
@@ -434,6 +510,13 @@ h2 {
   flex-wrap: wrap;
 }
 
+.results-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 .summary-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -469,6 +552,12 @@ h2 {
   border: 3px solid var(--edge);
   border-radius: 10px;
   box-shadow: 4px 4px 0 var(--pop);
+}
+.table-scroll {
+  max-height: 420px;
+  overflow-y: auto;
+  /* Makes .table-wrap itself the scrolling ancestor, so thead's
+     position:sticky actually has something to stick to. */
 }
 table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
 th, td { text-align: left; padding: 0.65rem 0.9rem; border-bottom: 2px solid var(--border); white-space: nowrap; }
@@ -507,3 +596,35 @@ input[type="number"] {
 .badge-ok { background: var(--ok-bg); color: var(--ok); }
 .badge-warn { background: var(--warn-bg); color: var(--warn); }
 .badge-manual { background: var(--info-bg); color: var(--info); }
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  padding: 1rem;
+}
+.modal-overlay.hidden { display: none; }
+.modal-box {
+  background: var(--bg-elevated);
+  border: 3px solid var(--edge);
+  border-radius: 12px;
+  box-shadow: 6px 6px 0 var(--pop);
+  padding: 1.5rem;
+  max-width: 380px;
+  width: 100%;
+}
+.modal-box p {
+  margin: 0 0 1.25rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+.modal-actions .btn { margin-top: 0; }
