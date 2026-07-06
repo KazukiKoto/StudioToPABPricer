@@ -51,8 +51,14 @@
       </div>
     </div>
 
-    <a class="btn btn-primary" href="/download/{{ token }}">Download priced CSV</a>
-    <a class="btn btn-secondary" href="/download/{{ token }}/aggregate">Download aggregate CSV</a>
+    <div class="split-btn">
+      <a class="btn btn-primary split-btn-main" href="/download/{{ token }}/simple">Download</a>
+      <button type="button" class="btn btn-primary split-btn-toggle" aria-haspopup="true" aria-expanded="false" aria-label="Choose download format">&#9662;</button>
+      <div class="split-btn-menu hidden">
+        <a href="/download/{{ token }}/simple">Download Simple</a>
+        <a href="/download/{{ token }}/detailed">Download Detailed</a>
+      </div>
+    </div>
 
     <h2>Priced bricks</h2>
     <div class="table-wrap">

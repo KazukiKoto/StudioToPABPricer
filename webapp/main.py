@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import tempfile
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
@@ -191,33 +192,39 @@ async def finalize(request: Request, token: str):
 
 @app.get("/download/{token}")
 def download(token: str):
+    """Default download: the simple, per-part aggregate CSV."""
+    return RedirectResponse(f"/download/{token}/simple", status_code=307)
+
+
+@app.get("/download/{token}/simple")
+def download_simple(token: str):
     session = SESSIONS.get(token)
     if not session:
         return RedirectResponse("/", status_code=303)
 
-    stem = Path(session["source_name"]).stem
-    output_path = OUTPUTS_DIR / f"{stem}_priced_{token[:8]}.csv"
-    write_priced_csv(session["rows"], output_path)
-
-    return FileResponse(
-        output_path,
-        media_type="text/csv",
-        filename=f"{stem}_priced.csv",
-    )
-
-
-@app.get("/download/{token}/aggregate")
-def download_aggregate(token: str):
-    session = SESSIONS.get(token)
-    if not session:
-        return RedirectResponse("/", status_code=303)
-
-    stem = Path(session["source_name"]).stem
-    output_path = OUTPUTS_DIR / f"{stem}_aggregate_{token[:8]}.csv"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_path = OUTPUTS_DIR / f"{timestamp}_simple_{token[:8]}.csv"
     write_aggregate_csv(session["rows"], output_path)
 
     return FileResponse(
         output_path,
         media_type="text/csv",
-        filename=f"{stem}_aggregate.csv",
+        filename=f"{timestamp}_simple.csv",
+    )
+
+
+@app.get("/download/{token}/detailed")
+def download_detailed(token: str):
+    session = SESSIONS.get(token)
+    if not session:
+        return RedirectResponse("/", status_code=303)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_path = OUTPUTS_DIR / f"{timestamp}_detailed_{token[:8]}.csv"
+    write_priced_csv(session["rows"], output_path)
+
+    return FileResponse(
+        output_path,
+        media_type="text/csv",
+        filename=f"{timestamp}_detailed.csv",
     )

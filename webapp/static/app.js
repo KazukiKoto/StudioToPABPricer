@@ -156,6 +156,36 @@ if (form && overlay) {
   });
 }
 
+document.querySelectorAll(".split-btn").forEach((splitBtn) => {
+  const toggle = splitBtn.querySelector(".split-btn-toggle");
+  const menu = splitBtn.querySelector(".split-btn-menu");
+  if (!toggle || !menu) return;
+
+  function closeMenu() {
+    menu.classList.add("hidden");
+    toggle.setAttribute("aria-expanded", "false");
+  }
+
+  toggle.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isOpen = !menu.classList.contains("hidden");
+    if (isOpen) {
+      closeMenu();
+    } else {
+      menu.classList.remove("hidden");
+      toggle.setAttribute("aria-expanded", "true");
+    }
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!splitBtn.contains(e.target)) closeMenu();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeMenu();
+  });
+});
+
 const themeToggle = document.getElementById("theme-toggle");
 const themeIcon = document.getElementById("theme-toggle-icon");
 const themeLabel = document.getElementById("theme-toggle-label");

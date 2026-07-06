@@ -212,6 +212,47 @@ h1 { margin-bottom: 0.25rem; }
 .btn-secondary { background: var(--bg-card); color: var(--ink); border: 1px solid var(--border); }
 .btn-secondary:hover { filter: brightness(0.95); }
 
+.split-btn {
+  display: inline-flex;
+  position: relative;
+  margin-top: 1rem;
+}
+.split-btn .split-btn-main,
+.split-btn .split-btn-toggle {
+  margin-top: 0;
+  border-radius: 0;
+}
+.split-btn .split-btn-main {
+  border-radius: 8px 0 0 8px;
+}
+.split-btn .split-btn-toggle {
+  border-radius: 0 8px 8px 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.35);
+  padding: 0.65rem 0.85rem;
+  font-size: 0.8rem;
+}
+.split-btn-menu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  min-width: 180px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  z-index: 5;
+}
+.split-btn-menu.hidden { display: none; }
+.split-btn-menu a {
+  display: block;
+  padding: 0.6rem 1rem;
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 0.92rem;
+}
+.split-btn-menu a:hover { background: var(--bg-card); }
+
 .overlay {
   position: fixed;
   inset: 0;
