@@ -24,7 +24,7 @@
         </button>
       </div>
     </div>
-    <p class="subtitle">Drag in one or more bricks CSVs to price every part against the official LEGO Pick a Brick site (GBP). Set &ldquo;Copies&rdquo; on a CSV to build several of that design (e.g. 3&times; one list and 17&times; another) into a single aggregate total.</p>
+    <p class="subtitle">Drag and drop one or more BrickLink Studio CSV files to price every piece against the official LEGO Pick a Brick site. You can specify the number of "Copies" of each CSV to price several sets of that design into one total.</p>
 
     {% if error %}
       <div class="banner banner-error">{{ error }}</div>
@@ -60,8 +60,8 @@
         </div>
       </template>
 
-      <button type="button" id="add-file-row" class="btn btn-secondary">+ Add another CSV</button>
-      <button type="submit" class="btn btn-primary">Price these CSVs</button>
+      <button type="button" id="add-file-row" class="btn btn-secondary">+ Add CSV</button>
+      <button type="submit" class="btn btn-primary">Submit</button>
     </form>
 
     <div id="loading-overlay" class="overlay hidden">

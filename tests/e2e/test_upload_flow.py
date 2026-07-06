@@ -43,7 +43,7 @@ def test_manual_price_entry_updates_totals(page, live_server):
     assert before_cost == "£0.66"  # 4*0.06 + 6*0.07 = 0.66, excludes the not-found 3867
 
     page.fill('input[name^="manual_price_"]', "0.15")
-    page.click('button:has-text("Accept prices & recalculate")')
+    page.click('button:has-text("Update Prices")')
     page.wait_for_selector(".banner-info")
 
     after_cost = page.locator(".card-value").nth(1).inner_text()
@@ -176,11 +176,11 @@ def test_manual_price_survives_copies_change(page, live_server):
     page.wait_for_selector(".summary-cards", timeout=60000)
 
     page.fill('input[name^="manual_price_"]', "0.15")
-    page.click('button:has-text("Accept prices & recalculate")')
+    page.click('button:has-text("Update Prices")')
     page.wait_for_selector(".banner-info")
     assert page.locator(".card-value").nth(1).inner_text() == "£0.81"  # 0.66 + 1*0.15
 
-    # "Accept prices & recalculate" is a full page reload, so the dropdown
+    # "Update Prices" is a full page reload, so the dropdown
     # is back to closed-by-default; open it to reach the stepper.
     page.click("#batch-dropdown-toggle")
     page.click("#copies-form .stepper-plus")  # 1 -> 2 copies
