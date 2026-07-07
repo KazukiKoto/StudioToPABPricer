@@ -8,7 +8,7 @@ on the host's Python version.
 
 ## Screenshots
 
-Upload one or more CSVs, with a "Copies" count per file:
+Upload one or more CSVs, with a "copies" count per file:
 
 ![Upload page](docs/screenshots/input.png)
 
