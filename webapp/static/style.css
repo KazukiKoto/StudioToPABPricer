@@ -99,7 +99,10 @@ body {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  border: 2px solid var(--edge);
+  /* Fixed black, not var(--edge) -- in dark mode --edge is a soft grey
+     (the rest of the UI's stroke colour there), but the studs read better
+     with a solid black outline regardless of theme. */
+  border: 2px solid #161616;
   box-shadow: 2px 2px 0 var(--pop);
 }
 .stud:nth-child(1) { background: var(--brick-red); }
@@ -107,8 +110,20 @@ body {
 .stud:nth-child(3) { background: var(--brick-blue); }
 .stud:nth-child(4) { background: var(--brick-green); }
 
+/* Dark mode only: every other hard-shadow in the app uses the single
+   --pop accent (brick-yellow) for consistency, but the four studs read
+   better each casting their own colour rather than all four sharing one
+   yellow shadow. */
+html[data-theme="dark"] .stud:nth-child(1) { box-shadow: 2px 2px 0 var(--brick-red); }
+html[data-theme="dark"] .stud:nth-child(2) { box-shadow: 2px 2px 0 var(--brick-yellow); }
+html[data-theme="dark"] .stud:nth-child(3) { box-shadow: 2px 2px 0 var(--brick-blue); }
+html[data-theme="dark"] .stud:nth-child(4) { box-shadow: 2px 2px 0 var(--brick-green); }
+
 h1 {
-  margin: 0 0 0.4rem;
+  /* Bottom margin is a bit more generous than it looks in isolation --
+     .highlight's own hard shadow + slight rotation eat into the visual
+     gap below the text, so 0.4rem read as too tight against the subtitle. */
+  margin: 0 0 0.75rem;
   font-size: 2.2rem;
   font-weight: 800;
   letter-spacing: -0.01em;
@@ -133,11 +148,25 @@ h2 {
 
 /* Same chunky look as the other buttons (.btn.btn-secondary supplies the
    border/shadow/hover/active); this just lays out the icon + label. */
-.theme-toggle {
+.theme-toggle,
+.back-to-upload {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
   font-size: 0.85rem;
+}
+
+/* The bare glyph sits inside its character cell off-centre (and looks
+   thin at the button's default text size) -- force it into its own
+   centred flex box at a larger size so it reads as a solid icon rather
+   than a stray character. */
+#theme-toggle-icon,
+#back-to-upload-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  line-height: 1;
 }
 
 .banner {
@@ -644,3 +673,88 @@ input[type="number"] {
   gap: 0.75rem;
 }
 .modal-actions .btn { margin-top: 0; }
+
+/* Mobile breakpoint. Desktop rules above are the untouched baseline; these
+   overrides only kick in narrow enough that flex rows stop having room
+   (file rows, batch rows, header) and text starts fighting for space. */
+@media (max-width: 640px) {
+  .page {
+    margin: 2rem auto;
+    padding: 0 1rem;
+  }
+  .page-wide {
+    margin: 1.25rem auto;
+    padding: 0 1rem 2.5rem;
+  }
+
+  h1 { font-size: 1.6rem; }
+
+  /* Keep the header as a row (not stacked) -- the title and the actions
+     share one line, with the theme toggle shrunk to an icon-only square
+     (below) so there's room. Stacking to a column pushed a full-width
+     button between the title and the subtitle, reading as a collision
+     rather than a clean layout. Extra row-gap covers the case where the
+     actions still wrap to their own line (e.g. "Back to upload" + the
+     toggle on the results page) -- without it that wrapped row sits right
+     under the title with the same cramped look .highlight caused above. */
+  .results-header,
+  .page-header {
+    row-gap: 1.1rem;
+  }
+  .results-header-actions,
+  .page-header-actions {
+    justify-content: flex-end;
+  }
+
+  /* Icon-only: the label ("Dark mode" / "Back to upload") is dropped,
+     leaving a compact square button sized off the icon glyph, not the
+     button's own padding. */
+  #theme-toggle-label,
+  #back-to-upload-label {
+    display: none;
+  }
+  .theme-toggle,
+  .back-to-upload {
+    padding: 0.5rem;
+    width: 2.6rem;
+    height: 2.6rem;
+    justify-content: center;
+    gap: 0;
+  }
+
+  /* Flex items default to min-width:auto (their content size), so without
+     this the dropzone refuses to shrink below its label text and the row
+     overflows sideways instead of the controls dropping below it. */
+  .file-row-main {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .file-row-text {
+    white-space: normal;
+  }
+  .file-row-controls {
+    justify-content: space-between;
+  }
+
+  .batch-file {
+    flex-wrap: wrap;
+  }
+  .batch-file-name {
+    white-space: normal;
+    flex-basis: 100%;
+  }
+
+  /* auto-fit(minmax(120px,1fr)) picks its column count from how many
+     120px-wide cards fit, independent of how many cards there actually
+     are -- at some widths that's 3, leaving the 4th card alone on its own
+     row. A phone is too narrow to fit all 4 legibly in one row (each card
+     would be under 40px of usable content width), so pin a stable 2x2
+     instead of leaving the column count to chance. */
+  .summary-cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  table { font-size: 0.82rem; }
+  th, td { padding: 0.5rem 0.6rem; }
+}
