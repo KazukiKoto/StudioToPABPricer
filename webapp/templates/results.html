@@ -170,18 +170,22 @@
               <td>{{ row.PartName }}</td>
               <td>{{ row.ColorName }}</td>
               <td>
-                <input
-                  type="number"
-                  form="quantities-form"
-                  class="qty-input"
-                  min="0"
-                  max="{{ max_qty }}"
-                  step="1"
-                  name="qty_{{ idx }}"
-                  value="{{ row.Qty }}"
-                  data-part-label="{{ row.PartName }} ({{ row.ColorName }})"
-                  aria-label="Quantity of {{ row.PartName }}"
-                />
+                <div class="stepper stepper-qty">
+                  <button type="button" class="stepper-btn stepper-minus" aria-label="Decrease quantity of {{ row.PartName }}">&minus;</button>
+                  <input
+                    type="number"
+                    form="quantities-form"
+                    class="qty-input"
+                    min="0"
+                    max="{{ max_qty }}"
+                    step="1"
+                    name="qty_{{ idx }}"
+                    value="{{ row.Qty }}"
+                    data-part-label="{{ row.PartName }} ({{ row.ColorName }})"
+                    aria-label="Quantity of {{ row.PartName }}"
+                  />
+                  <button type="button" class="stepper-btn stepper-plus" aria-label="Increase quantity of {{ row.PartName }}">&plus;</button>
+                </div>
               </td>
               <td>&pound;{{ row.UnitPriceGBP }}</td>
               <td>&pound;{{ row.LineTotalGBP }}</td>
@@ -220,18 +224,22 @@
                 <td>{{ row.PartName }}</td>
                 <td>{{ row.ColorName }}</td>
                 <td>
-                  <input
-                    type="number"
-                    form="quantities-form"
-                    class="qty-input"
-                    min="0"
-                    max="{{ max_qty }}"
-                    step="1"
-                    name="qty_{{ idx }}"
-                    value="{{ row.Qty }}"
-                    data-part-label="{{ row.PartName }} ({{ row.ColorName }})"
-                    aria-label="Quantity of {{ row.PartName }}"
-                  />
+                  <div class="stepper stepper-qty">
+                    <button type="button" class="stepper-btn stepper-minus" aria-label="Decrease quantity of {{ row.PartName }}">&minus;</button>
+                    <input
+                      type="number"
+                      form="quantities-form"
+                      class="qty-input"
+                      min="0"
+                      max="{{ max_qty }}"
+                      step="1"
+                      name="qty_{{ idx }}"
+                      value="{{ row.Qty }}"
+                      data-part-label="{{ row.PartName }} ({{ row.ColorName }})"
+                      aria-label="Quantity of {{ row.PartName }}"
+                    />
+                    <button type="button" class="stepper-btn stepper-plus" aria-label="Increase quantity of {{ row.PartName }}">&plus;</button>
+                  </div>
                 </td>
                 <td>
                   <input

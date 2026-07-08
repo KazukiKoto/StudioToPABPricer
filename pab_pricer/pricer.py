@@ -7,6 +7,7 @@ import json
 import re
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -145,9 +146,20 @@ def price_rows(
     delay: float = 0.5,
     progress_callback=None,
     fetcher=None,
+    max_workers: int = 4,
 ) -> list[dict[str, str]]:
     """Fetch prices for each row's ElementId, grouping requests by part number so
     each distinct LEGO part is only looked up once.
+
+    Distinct part numbers are looked up concurrently, bounded by `max_workers`,
+    rather than one at a time -- each lookup is a `curl` subprocess call that
+    spends nearly all its time waiting on network I/O, not CPU, so overlapping
+    several in flight cuts wall-clock time roughly `max_workers`-fold for CSVs
+    with many distinct parts. `max_workers` doubles as the politeness control
+    (caps how many requests LEGO's site ever sees at once); `delay`, if set,
+    additionally paces how often *new* requests are dispatched -- it's divided
+    across workers so the overall dispatch rate stays the same as when it was
+    the only throttle.
 
     `fetcher` defaults to `fetch_part_siblings` (looked up at call time, not bound
     at import time) so tests can monkeypatch the module-level function without
@@ -158,15 +170,27 @@ def price_rows(
     priced_rows: list[dict[str, str]] = []
 
     part_numbers = sorted({row["BLItemNo"] for row in rows})
-    for i, part_number in enumerate(part_numbers):
+
+    def fetch_one(part_number: str) -> tuple[str, dict[str, ElementPrice]]:
         try:
-            cache[part_number] = fetch(part_number, locale=locale)
+            return part_number, fetch(part_number, locale=locale)
         except PabPriceFetchError:
-            cache[part_number] = {}
-        if progress_callback:
-            progress_callback(i + 1, len(part_numbers), part_number)
-        if delay and i < len(part_numbers) - 1:
-            time.sleep(delay)
+            return part_number, {}
+
+    completed = 0
+    with ThreadPoolExecutor(max_workers=max(1, max_workers)) as executor:
+        futures = []
+        for i, part_number in enumerate(part_numbers):
+            futures.append(executor.submit(fetch_one, part_number))
+            if delay and i < len(part_numbers) - 1:
+                time.sleep(delay / max(1, max_workers))
+
+        for future in as_completed(futures):
+            part_number, result = future.result()
+            cache[part_number] = result
+            completed += 1
+            if progress_callback:
+                progress_callback(completed, len(part_numbers), part_number)
 
     for row in rows:
         siblings = cache.get(row["BLItemNo"], {})

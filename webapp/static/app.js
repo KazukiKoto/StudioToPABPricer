@@ -277,6 +277,11 @@ function initMainContent() {
   // possibly inside the not-found table's own /finalize form) -- FormData
   // still picks up form-associated inputs regardless of DOM position, so
   // submitViaAjax(quantitiesForm) captures all of them correctly.
+  //
+  // Each Qty cell uses the same .stepper +/- widget as the "Files" batch
+  // list and the upload page's copies control, rather than the browser's
+  // own number-input arrows, so quantity editing looks and behaves the
+  // same everywhere on the site.
   const quantitiesForm = document.getElementById("quantities-form");
   if (quantitiesForm) {
     quantitiesForm.addEventListener("submit", (e) => {
@@ -284,23 +289,36 @@ function initMainContent() {
       submitViaAjax(quantitiesForm);
     });
 
-    document.querySelectorAll(".qty-input").forEach((input) => {
+    document.querySelectorAll(".stepper-qty").forEach((stepper) => {
+      const input = stepper.querySelector(".qty-input");
+      const minusBtn = stepper.querySelector(".stepper-minus");
+      const plusBtn = stepper.querySelector(".stepper-plus");
       const original = input.value;
-      input.addEventListener("change", async () => {
-        const value = parseInt(input.value, 10);
-        if (Number.isNaN(value) || value < 0) {
-          input.value = original;
-          return;
-        }
-        if (value === 0) {
-          const label = input.dataset.partLabel || "this part";
+      const label = input.dataset.partLabel || "this part";
+
+      async function commit(newValue) {
+        const max = parseInt(input.max, 10) || Infinity;
+        const clamped = Math.min(max, Math.max(0, newValue));
+        if (clamped === 0) {
           const confirmed = await showConfirm(`Remove all ${label} from this batch?`);
           if (!confirmed) {
             input.value = original;
             return;
           }
         }
+        input.value = clamped;
         submitViaAjax(quantitiesForm);
+      }
+
+      minusBtn.addEventListener("click", () => commit((parseInt(input.value, 10) || 0) - 1));
+      plusBtn.addEventListener("click", () => commit((parseInt(input.value, 10) || 0) + 1));
+      input.addEventListener("change", () => {
+        const value = parseInt(input.value, 10);
+        if (Number.isNaN(value) || value < 0) {
+          input.value = original;
+          return;
+        }
+        commit(value);
       });
     });
   }

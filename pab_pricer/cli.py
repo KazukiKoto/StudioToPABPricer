@@ -36,6 +36,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=0.5,
         help="Seconds to wait between requests for distinct part numbers (default: 0.5)",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=4,
+        help="Number of distinct part numbers to look up concurrently (default: 4)",
+    )
     return parser
 
 
@@ -60,7 +66,9 @@ def main(argv: list[str] | None = None) -> int:
     def progress(done: int, total: int, part_number: str) -> None:
         print(f"  [{done}/{total}] priced part {part_number}")
 
-    priced_rows = price_rows(rows, locale=args.locale, delay=args.delay, progress_callback=progress)
+    priced_rows = price_rows(
+        rows, locale=args.locale, delay=args.delay, progress_callback=progress, max_workers=args.workers
+    )
     write_priced_csv(priced_rows, output_path)
 
     print(f"Wrote priced CSV to {output_path}")

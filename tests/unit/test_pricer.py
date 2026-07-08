@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import time
 
 import pytest
 
@@ -49,6 +50,43 @@ def test_price_rows_prices_known_parts_and_flags_unknown_ones():
     assert by_part["3867"]["Availability"] == "NOT_FOUND_ON_PAB"
     assert by_part["3867"]["UnitPriceGBP"] == ""
     assert by_part["3867"]["LineTotalGBP"] == ""
+
+
+def test_price_rows_with_concurrent_workers_is_still_correct():
+    """Same fixture/assertions as the serial-fetch test above, but forcing
+    multiple concurrent workers -- the concurrency must not change which
+    part gets which price, or race on the shared cache dict."""
+    rows = read_brick_rows(FIXTURES_DIR / "simple.csv")
+    priced = price_rows(rows, fetcher=fake_fetch_part_siblings, delay=0, max_workers=8)
+
+    by_part = {r["BLItemNo"]: r for r in priced}
+    assert by_part["3005"]["Availability"] == "AVAILABLE"
+    assert by_part["3005"]["UnitPriceGBP"] == "0.06"
+    assert by_part["3005"]["LineTotalGBP"] == "0.24"
+    assert by_part["3867"]["Availability"] == "NOT_FOUND_ON_PAB"
+
+
+def test_price_rows_fetches_distinct_parts_concurrently():
+    """Regression test for the actual point of max_workers: with a fetcher
+    that sleeps, several distinct part numbers looked up with max_workers=5
+    must overlap in time rather than run one after another -- otherwise this
+    is no faster than the old strictly-serial loop."""
+    rows = [
+        {"BLItemNo": str(n), "ElementId": "1", "PartName": "Part", "Qty": "1"}
+        for n in range(5)
+    ]
+
+    def slow_fetch(part_number, locale="en-gb", timeout=15.0, retries=3):
+        time.sleep(0.2)
+        return {}
+
+    start = time.perf_counter()
+    price_rows(rows, fetcher=slow_fetch, delay=0, max_workers=5)
+    elapsed = time.perf_counter() - start
+
+    # Serial would take ~1.0s (5 * 0.2s); concurrent should take close to a
+    # single 0.2s slot. Generous bound to avoid flaking on a loaded CI box.
+    assert elapsed < 0.8
 
 
 def test_price_rows_default_fetcher_can_be_monkeypatched(patch_fetcher):
