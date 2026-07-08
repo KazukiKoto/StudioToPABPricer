@@ -537,9 +537,15 @@ h2 {
   flex-wrap: wrap;
 }
 
+/* Fixed 2x2, not auto-fit(minmax(...)) -- auto-fit picks its column count
+   from how many 140px-wide cards fit at the current width, independent of
+   there being exactly 4 cards. At some desktop widths that resolves to 3
+   columns, leaving the 4th card alone on its own row. Pinning 2 columns
+   keeps the layout stable (2 and 2) at every width instead of only on
+   mobile, where a separate override already forced the same 2x2. */
 .summary-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 1.1rem;
   margin: 1.75rem 0;
 }
@@ -581,23 +587,30 @@ h2 {
 }
 
 /* Themed scrollbar for the bounded-height panels (tables + batch file
-   list), instead of the bare OS-default one. */
+   list), instead of the bare OS-default one. Thumb uses --pop (not --edge)
+   for stronger contrast against the track -- in dark mode --edge is a
+   mid-grey that read as barely-there against --bg-card, whereas --pop is
+   the same high-contrast accent already used for hard shadows (ink in
+   light mode, brick-yellow in dark mode). Track also gets its own border
+   so the whole scrollbar reads as a distinct control, not a faint smudge
+   in the corner. */
 .table-scroll,
 .batch-files-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: var(--edge) var(--bg-card);
+  scrollbar-width: auto;
+  scrollbar-color: var(--pop) var(--bg-card);
 }
 .table-scroll::-webkit-scrollbar,
 .batch-files-scroll::-webkit-scrollbar {
-  width: 12px;
+  width: 16px;
 }
 .table-scroll::-webkit-scrollbar-track,
 .batch-files-scroll::-webkit-scrollbar-track {
   background: var(--bg-card);
+  border-left: 2px solid var(--border);
 }
 .table-scroll::-webkit-scrollbar-thumb,
 .batch-files-scroll::-webkit-scrollbar-thumb {
-  background-color: var(--edge);
+  background-color: var(--pop);
   border-radius: 8px;
   border: 3px solid var(--bg-card);
 }
@@ -744,14 +757,9 @@ input[type="number"] {
     flex-basis: 100%;
   }
 
-  /* auto-fit(minmax(120px,1fr)) picks its column count from how many
-     120px-wide cards fit, independent of how many cards there actually
-     are -- at some widths that's 3, leaving the 4th card alone on its own
-     row. A phone is too narrow to fit all 4 legibly in one row (each card
-     would be under 40px of usable content width), so pin a stable 2x2
-     instead of leaving the column count to chance. */
+  /* Column count is already pinned to 2x2 at every width by the base rule
+     above; only the gap needs shrinking here for narrow screens. */
   .summary-cards {
-    grid-template-columns: repeat(2, 1fr);
     gap: 0.75rem;
   }
 

@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from pab_pricer.pricer import (
-    merge_unpriced_duplicates,
+    merge_duplicate_parts,
     price_rows,
     read_brick_rows,
     write_aggregate_csv,
@@ -46,6 +46,7 @@ ALLOWED_CSV_CONTENT_TYPES = {
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB per CSV
 MAX_FILES_PER_UPLOAD = 64
 MAX_MULTIPLIER = 256
+MAX_QTY = 100_000  # per-row quantity edits on the results page
 
 # In-memory sessions never expire on their own, so a long-lived deployment
 # needs an eviction policy: sessions older than the TTL, or beyond the count
@@ -112,7 +113,8 @@ async def security_headers_and_csrf_cookie(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:"
+        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+        "object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
     )
     response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
     return response
@@ -173,7 +175,8 @@ def _source_name(session: dict) -> str:
 
 def _materialize(session: dict) -> list[dict[str, str]]:
     """Derive the current, flattened, priced row list from a session's
-    per-file base rows + live copy counts + any manual price overrides.
+    per-file base rows + live copy counts + any quantity/manual price
+    overrides.
 
     Recomputed on every render rather than stored, so changing one file's
     copy count (or adding/removing a file) never needs to touch the others'
@@ -184,7 +187,27 @@ def _materialize(session: dict) -> list[dict[str, str]]:
         for file_entry in session["files"]
         for row in file_entry["base_rows"]
     ]
-    merged = merge_unpriced_duplicates(scaled_rows)
+    merged = merge_duplicate_parts(scaled_rows)
+
+    # Quantity overrides are an absolute pin, not a delta -- like manual price
+    # overrides, once a user sets one it wins regardless of later copies/file
+    # changes elsewhere in the batch, until they change or remove it. Applied
+    # before manual-price overrides below so a manually-priced row's
+    # recomputed LineTotalGBP uses the already-overridden quantity.
+    qty_overrides = session.get("qty_overrides", {})
+    if qty_overrides:
+        adjusted = []
+        for row in merged:
+            key = (row["BLItemNo"], row["ElementId"])
+            if key in qty_overrides:
+                qty = qty_overrides[key]
+                if qty <= 0:
+                    continue  # 0 removes that piece from the batch entirely
+                row["Qty"] = str(qty)
+                if row["UnitPriceGBP"]:
+                    row["LineTotalGBP"] = f"{float(row['UnitPriceGBP']) * qty:.2f}"
+            adjusted.append(row)
+        merged = adjusted
 
     overrides = session.get("manual_overrides", {})
     for row in merged:
@@ -215,6 +238,7 @@ def _render_results(request: Request, token: str, message: str | None = None) ->
             "message": message,
             "csrf_token": request.state.csrf_token,
             "max_multiplier": MAX_MULTIPLIER,
+            "max_qty": MAX_QTY,
             **_summary(rows),
         },
     )
@@ -267,6 +291,33 @@ async def _read_and_validate_csv(
     return name, multiplier, rows, None
 
 
+def _extract_manual_overrides(rows: list[dict[str, str]]) -> dict[tuple[str, str], float]:
+    """Pull manual-price overrides out of rows read from a previously-downloaded
+    results CSV (simple or detailed) dropped back into the upload form.
+
+    Only detailed CSVs carry an Availability column, so this is a no-op for
+    simple/aggregate re-uploads -- those have no way to distinguish a manual
+    price from a PAB one, which matches the simple format's existing
+    limitations. Read from the raw uploaded rows (before price_rows() fetches
+    fresh data and overwrites Availability/UnitPriceGBP on its own copies),
+    so a part no longer found on PAB keeps its previous manual price instead
+    of reverting to NOT_FOUND.
+    """
+    overrides: dict[tuple[str, str], float] = {}
+    for row in rows:
+        if row.get("Availability") != "MANUAL":
+            continue
+        raw_price = (row.get("UnitPriceGBP") or "").strip()
+        if not raw_price:
+            continue
+        try:
+            price = float(raw_price)
+        except ValueError:
+            continue
+        overrides[(row["BLItemNo"], row["ElementId"])] = price
+    return overrides
+
+
 def _build_file_entries(valid_files: list[tuple[str, int, list[dict[str, str]]]]) -> list[dict]:
     """Price every row across all files in one batch (so distinct part numbers
     shared between files are only looked up once), then split the priced rows
@@ -317,10 +368,15 @@ async def upload(
             ),
         )
 
+    manual_overrides: dict[tuple[str, str], float] = {}
+    for _, _, rows in valid_files:
+        manual_overrides.update(_extract_manual_overrides(rows))
+
     token = uuid.uuid4().hex
     SESSIONS[token] = {
         "files": _build_file_entries(valid_files),
-        "manual_overrides": {},
+        "manual_overrides": manual_overrides,
+        "qty_overrides": {},
         "last_accessed": time.time(),
     }
     _evict_stale_sessions()
@@ -360,6 +416,8 @@ async def add_files(
 
     if valid_files:
         session["files"].extend(_build_file_entries(valid_files))
+        for _, _, rows in valid_files:
+            session["manual_overrides"].update(_extract_manual_overrides(rows))
 
     if errors:
         message = " ".join(errors)
@@ -417,6 +475,52 @@ async def update_copies(request: Request, token: str):
         return RedirectResponse("/", status_code=303)
 
     message = f"Removed {', '.join(removed_names)}." if removed_names else None
+    return _render_results(request, token, message=message)
+
+
+@app.post("/session/{token}/quantities", response_class=HTMLResponse)
+async def update_quantities(request: Request, token: str):
+    """Per-piece quantity editor: each row's Qty field on the results page
+    (both the priced and not-found tables) submits here. Setting a row's
+    quantity to 0 removes just that piece from the batch (the client confirms
+    with the user first, mirroring the per-file copies remove-at-zero
+    behaviour). Overrides are keyed by (BLItemNo, ElementId) and, like manual
+    price overrides, persist as an absolute value until changed again --
+    see _materialize()."""
+    session = SESSIONS.get(token)
+    if not session:
+        return RedirectResponse("/", status_code=303)
+
+    form = await request.form()
+    _verify_csrf(request, form.get("csrf_token"))
+    session["last_accessed"] = time.time()
+
+    rows = _materialize(session)
+
+    # Validate everything before changing anything, so a single bad field
+    # can't leave the session in a half-updated state.
+    new_values: dict[tuple[str, str], int] = {}
+    for idx, row in enumerate(rows):
+        raw = form.get(f"qty_{idx}")
+        if raw is None:
+            continue
+        try:
+            value = int(raw)
+        except ValueError:
+            return _render_results(request, token, message=f"Invalid quantity {raw!r}; no changes made.")
+        if value < 0 or value > MAX_QTY:
+            return _render_results(
+                request, token, message=f"Quantity must be between 0 and {MAX_QTY}; no changes made."
+            )
+        new_values[(row["BLItemNo"], row["ElementId"])] = value
+
+    if not new_values:
+        return _render_results(request, token)
+
+    session.setdefault("qty_overrides", {}).update(new_values)
+
+    removed = sum(1 for v in new_values.values() if v == 0)
+    message = f"Removed {removed} piece(s) from the batch." if removed else None
     return _render_results(request, token, message=message)
 
 

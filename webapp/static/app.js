@@ -271,6 +271,58 @@ function initMainContent() {
     });
   }
 
+  // ---- Per-row Qty editing (Priced bricks + Not found tables) ----
+  // Every .qty-input targets #quantities-form via its `form` attribute
+  // rather than DOM nesting (it lives inside whichever table row it's in,
+  // possibly inside the not-found table's own /finalize form) -- FormData
+  // still picks up form-associated inputs regardless of DOM position, so
+  // submitViaAjax(quantitiesForm) captures all of them correctly.
+  //
+  // Each Qty cell uses the same .stepper +/- widget as the "Files" batch
+  // list and the upload page's copies control, rather than the browser's
+  // own number-input arrows, so quantity editing looks and behaves the
+  // same everywhere on the site.
+  const quantitiesForm = document.getElementById("quantities-form");
+  if (quantitiesForm) {
+    quantitiesForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      submitViaAjax(quantitiesForm);
+    });
+
+    document.querySelectorAll(".stepper-qty").forEach((stepper) => {
+      const input = stepper.querySelector(".qty-input");
+      const minusBtn = stepper.querySelector(".stepper-minus");
+      const plusBtn = stepper.querySelector(".stepper-plus");
+      const original = input.value;
+      const label = input.dataset.partLabel || "this part";
+
+      async function commit(newValue) {
+        const max = parseInt(input.max, 10) || Infinity;
+        const clamped = Math.min(max, Math.max(0, newValue));
+        if (clamped === 0) {
+          const confirmed = await showConfirm(`Remove all ${label} from this batch?`);
+          if (!confirmed) {
+            input.value = original;
+            return;
+          }
+        }
+        input.value = clamped;
+        submitViaAjax(quantitiesForm);
+      }
+
+      minusBtn.addEventListener("click", () => commit((parseInt(input.value, 10) || 0) - 1));
+      plusBtn.addEventListener("click", () => commit((parseInt(input.value, 10) || 0) + 1));
+      input.addEventListener("change", () => {
+        const value = parseInt(input.value, 10);
+        if (Number.isNaN(value) || value < 0) {
+          input.value = original;
+          return;
+        }
+        commit(value);
+      });
+    });
+  }
+
   // ---- "Files" dropdown open/close ----
   const batchToggle = document.getElementById("batch-dropdown-toggle");
   const batchPanel = document.getElementById("batch-dropdown-panel");

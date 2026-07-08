@@ -138,6 +138,16 @@
       </div>
     </div>
 
+    <!-- Empty except for its CSRF token -- every Qty input below (in both
+         this table and the not-found table further down) targets this form
+         via its `form` attribute rather than being a literal descendant, so
+         a single quantity edit anywhere submits through one shared endpoint
+         regardless of which visible <form> (or none) it happens to sit
+         inside. See app.js for the auto-submit wiring. -->
+    <form id="quantities-form" action="/session/{{ token }}/quantities" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+    </form>
+
     <h2>Priced bricks</h2>
     <div class="table-wrap table-scroll">
       <table>
@@ -159,7 +169,24 @@
               <td>{{ row.BLItemNo }}</td>
               <td>{{ row.PartName }}</td>
               <td>{{ row.ColorName }}</td>
-              <td>{{ row.Qty }}</td>
+              <td>
+                <div class="stepper stepper-qty">
+                  <button type="button" class="stepper-btn stepper-minus" aria-label="Decrease quantity of {{ row.PartName }}">&minus;</button>
+                  <input
+                    type="number"
+                    form="quantities-form"
+                    class="qty-input"
+                    min="0"
+                    max="{{ max_qty }}"
+                    step="1"
+                    name="qty_{{ idx }}"
+                    value="{{ row.Qty }}"
+                    data-part-label="{{ row.PartName }} ({{ row.ColorName }})"
+                    aria-label="Quantity of {{ row.PartName }}"
+                  />
+                  <button type="button" class="stepper-btn stepper-plus" aria-label="Increase quantity of {{ row.PartName }}">&plus;</button>
+                </div>
+              </td>
               <td>&pound;{{ row.UnitPriceGBP }}</td>
               <td>&pound;{{ row.LineTotalGBP }}</td>
               <td><span class="badge badge-ok">{{ row.Availability }}</span></td>
@@ -196,7 +223,24 @@
                 <td>{{ row.BLItemNo }}</td>
                 <td>{{ row.PartName }}</td>
                 <td>{{ row.ColorName }}</td>
-                <td>{{ row.Qty }}</td>
+                <td>
+                  <div class="stepper stepper-qty">
+                    <button type="button" class="stepper-btn stepper-minus" aria-label="Decrease quantity of {{ row.PartName }}">&minus;</button>
+                    <input
+                      type="number"
+                      form="quantities-form"
+                      class="qty-input"
+                      min="0"
+                      max="{{ max_qty }}"
+                      step="1"
+                      name="qty_{{ idx }}"
+                      value="{{ row.Qty }}"
+                      data-part-label="{{ row.PartName }} ({{ row.ColorName }})"
+                      aria-label="Quantity of {{ row.PartName }}"
+                    />
+                    <button type="button" class="stepper-btn stepper-plus" aria-label="Increase quantity of {{ row.PartName }}">&plus;</button>
+                  </div>
+                </td>
                 <td>
                   <input
                     type="number"
