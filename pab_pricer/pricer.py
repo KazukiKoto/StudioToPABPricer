@@ -211,7 +211,13 @@ def merge_unpriced_duplicates(rows: list[dict[str, str]]) -> list[dict[str, str]
 
 def aggregate_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
     """Roll every row up by unique piece (BLItemNo + ElementId), summing quantity
-    and line total, for a compact per-part summary CSV."""
+    and line total, for a compact per-part summary CSV.
+
+    ElementId is included in the output (not just used as a grouping key) so
+    this CSV can be dropped back into the upload form later and re-priced --
+    read_brick_rows() requires it, so without it a re-uploaded aggregate CSV
+    would silently match zero rows.
+    """
     order: list[tuple[str, str]] = []
     groups: dict[tuple[str, str], dict[str, str]] = {}
 
@@ -221,6 +227,7 @@ def aggregate_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
             order.append(key)
             groups[key] = {
                 "BLItemNo": row["BLItemNo"],
+                "ElementId": row["ElementId"],
                 "PartName": row["PartName"],
                 "ColorName": row.get("ColorName", ""),
                 "Qty": 0,
@@ -239,6 +246,7 @@ def aggregate_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
         aggregated.append(
             {
                 "BLItemNo": group["BLItemNo"],
+                "ElementId": group["ElementId"],
                 "PartName": group["PartName"],
                 "ColorName": group["ColorName"],
                 "Qty": str(group["Qty"]),
@@ -252,7 +260,7 @@ def aggregate_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
 def write_aggregate_csv(rows: list[dict[str, str]], output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     aggregated = aggregate_rows(rows)
-    fieldnames = ["BLItemNo", "PartName", "ColorName", "Qty", "UnitPriceGBP", "LineTotalGBP"]
+    fieldnames = ["BLItemNo", "ElementId", "PartName", "ColorName", "Qty", "UnitPriceGBP", "LineTotalGBP"]
 
     total_qty = sum(int(r["Qty"]) for r in aggregated)
     total_cost = sum(float(r["LineTotalGBP"]) for r in aggregated if r["LineTotalGBP"])

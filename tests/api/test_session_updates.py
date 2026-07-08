@@ -191,6 +191,72 @@ def test_add_files_rejects_without_csrf_token(app_client, csrf_token):
     assert resp.status_code == 403
 
 
+def test_reupload_of_downloaded_simple_csv_reprices_correctly(app_client, csrf_token):
+    """A user should be able to download the simple CSV, then drop it straight
+    back into the upload form later and have it re-price normally."""
+    files, data = _upload_files(csrf_token, ("simple.csv", 1))
+    upload_resp = app_client.post("/upload", files=files, data=data)
+    token = _extract_token(upload_resp.text)
+
+    downloaded = app_client.get(f"/download/{token}/simple").content
+
+    reupload_files = [("files", ("simple_reupload.csv", downloaded, "text/csv"))]
+    reupload_data = {"multipliers": ["1"], "csrf_token": csrf_token}
+    resp = app_client.post("/upload", files=reupload_files, data=reupload_data)
+
+    assert resp.status_code == 200
+    assert "Pricing results" in resp.text
+    assert "3005" in resp.text and "3023" in resp.text
+    assert ">11<" in resp.text  # same qty total as the original upload: 4+6+1
+
+
+def test_reupload_of_downloaded_detailed_csv_preserves_manual_price(app_client, csrf_token):
+    """Downloading the detailed CSV after setting a manual price, then
+    re-uploading it later, must not lose that manual price -- 3867 is never
+    in the fake PAB catalog, so without this the re-fetch would revert it
+    straight back to NOT_FOUND."""
+    files, data = _upload_files(csrf_token, ("simple.csv", 1))
+    upload_resp = app_client.post("/upload", files=files, data=data)
+    token = _extract_token(upload_resp.text)
+
+    app_client.post(f"/finalize/{token}", data={"manual_price_2": "0.15", "csrf_token": csrf_token})
+    downloaded = app_client.get(f"/download/{token}/detailed").content
+
+    reupload_files = [("files", ("detailed_reupload.csv", downloaded, "text/csv"))]
+    reupload_data = {"multipliers": ["1"], "csrf_token": csrf_token}
+    resp = app_client.post("/upload", files=reupload_files, data=reupload_data)
+
+    assert resp.status_code == 200
+    assert "badge-manual" in resp.text
+    assert "&pound;0.15" in resp.text
+    assert 'class="card-value">0<' in resp.text  # "Needs attention": 3867 is MANUAL, not NOT_FOUND
+
+
+def test_reupload_via_add_files_also_preserves_manual_price(app_client, csrf_token):
+    """Same manual-price preservation, but dropping the manual-priced download
+    into a *different*, freshly-created session via the results page's
+    'Add CSV' (add-files) path, rather than back into the session that
+    originally had the override -- proves add_files itself extracts the
+    override, not just that it survived on the original session's dict."""
+    files, data = _upload_files(csrf_token, ("simple.csv", 1))
+    first_upload = app_client.post("/upload", files=files, data=data)
+    first_token = _extract_token(first_upload.text)
+    app_client.post(f"/finalize/{first_token}", data={"manual_price_2": "0.15", "csrf_token": csrf_token})
+    downloaded = app_client.get(f"/download/{first_token}/detailed").content
+
+    other_files, other_data = _upload_files(csrf_token, ("other.csv", 1))
+    second_upload = app_client.post("/upload", files=other_files, data=other_data)
+    second_token = _extract_token(second_upload.text)
+    assert "badge-manual" not in second_upload.text  # sanity: no override yet
+
+    add_files = [("files", ("detailed_reupload.csv", downloaded, "text/csv"))]
+    add_data = {"multipliers": ["1"], "csrf_token": csrf_token}
+    resp = app_client.post(f"/session/{second_token}/add-files", files=add_files, data=add_data)
+
+    assert resp.status_code == 200
+    assert "badge-manual" in resp.text
+
+
 def test_downloads_reflect_copies_update(app_client, csrf_token):
     files, data = _upload_files(csrf_token, ("simple.csv", 1))
     upload_resp = app_client.post("/upload", files=files, data=data)
@@ -201,5 +267,6 @@ def test_downloads_reflect_copies_update(app_client, csrf_token):
     resp = app_client.get(f"/download/{token}/simple")
     assert resp.status_code == 200
     lines = resp.text.splitlines()
+    header = lines[0].split(",")
     total_line = next(line for line in lines if line.startswith("TOTAL"))
-    assert total_line.split(",")[3] == "55"  # (4+6+1)*5
+    assert total_line.split(",")[header.index("Qty")] == "55"  # (4+6+1)*5
