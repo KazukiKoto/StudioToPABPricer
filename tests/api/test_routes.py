@@ -257,6 +257,27 @@ def test_security_headers_present_on_every_response(app_client):
     assert "max-age=" in resp.headers["strict-transport-security"]
 
 
+def test_session_survives_app_restart(app_client, csrf_token, monkeypatch):
+    """Stage 3 acceptance criterion: a session created before a process
+    restart (container redeploy, crash, etc.) must still be resolvable
+    after -- simulated by pointing a brand new SQLiteSessionStore instance
+    at the same on-disk file the app_client fixture already created,
+    exactly as a fresh `uvicorn` process would on the next boot."""
+    import webapp.main as webapp_main
+    from webapp.session_store import SQLiteSessionStore
+
+    files, data = _upload_files(csrf_token, ("simple.csv", 1))
+    upload_resp = app_client.post("/upload", files=files, data=data)
+    token = _extract_token(upload_resp.text)
+
+    db_path = webapp_main.SESSIONS.db_path
+    monkeypatch.setattr(webapp_main, "SESSIONS", SQLiteSessionStore(db_path))
+
+    resp = app_client.get(f"/download/{token}/simple")
+    assert resp.status_code == 200
+    assert "3005" in resp.text
+
+
 def test_session_eviction_caps_total_sessions(app_client, csrf_token, monkeypatch):
     import webapp.main as webapp_main
 
@@ -274,14 +295,18 @@ def test_session_eviction_drops_stale_sessions_by_ttl(app_client, csrf_token, mo
 
     import webapp.main as webapp_main
 
-    monkeypatch.setattr(webapp_main, "SESSION_TTL_SECONDS", 0.01)
+    # Wide margin between "definitely expired" and "definitely fresh" --
+    # session creation and eviction both now involve real SQLite disk I/O
+    # (even against a tmp_path file), so a razor-thin TTL here would make
+    # the second upload's own freshly-created session flaky-evict too.
+    monkeypatch.setattr(webapp_main, "SESSION_TTL_SECONDS", 0.2)
 
     files, data = _upload_files(csrf_token, ("simple.csv", 1))
     first_resp = app_client.post("/upload", files=files, data=data)
     first_token = _extract_token(first_resp.text)
     assert first_token in webapp_main.SESSIONS
 
-    time.sleep(0.05)
+    time.sleep(0.5)
 
     files, data = _upload_files(csrf_token, ("other.csv", 1))
     app_client.post("/upload", files=files, data=data)

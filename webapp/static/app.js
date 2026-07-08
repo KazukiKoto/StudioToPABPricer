@@ -467,6 +467,52 @@ function initMainContent() {
     });
   });
 
+  // ---- Sortable table columns (Priced bricks + Not found tables) ----
+  // Click a header to sort that table's rows by that column, toggling
+  // ascending/descending on repeated clicks; numeric-looking columns sort
+  // numerically, everything else alphabetically. Cells that hold an
+  // editable input (Qty, manual price) sort by the input's current value,
+  // not its static markup.
+  function cellSortValue(cell) {
+    const input = cell.querySelector("input");
+    if (input) return input.value.trim();
+    return cell.textContent.trim();
+  }
+
+  document.querySelectorAll(".sortable-table").forEach((table) => {
+    const headers = Array.from(table.querySelectorAll("thead th"));
+    const tbody = table.querySelector("tbody");
+    if (!tbody) return;
+
+    headers.forEach((th, colIndex) => {
+      function sort() {
+        const dir = th.classList.contains("sort-asc") ? "desc" : "asc";
+        headers.forEach((h) => h.classList.remove("sort-asc", "sort-desc"));
+        th.classList.add(dir === "asc" ? "sort-asc" : "sort-desc");
+
+        const rows = Array.from(tbody.querySelectorAll("tr"));
+        rows.sort((a, b) => {
+          const aVal = cellSortValue(a.children[colIndex]);
+          const bVal = cellSortValue(b.children[colIndex]);
+          const aNum = parseFloat(aVal.replace(/[^0-9.-]/g, ""));
+          const bNum = parseFloat(bVal.replace(/[^0-9.-]/g, ""));
+          const bothNumeric = aVal !== "" && bVal !== "" && !Number.isNaN(aNum) && !Number.isNaN(bNum);
+          const cmp = bothNumeric ? aNum - bNum : aVal.localeCompare(bVal);
+          return dir === "asc" ? cmp : -cmp;
+        });
+        rows.forEach((row) => tbody.appendChild(row));
+      }
+
+      th.addEventListener("click", sort);
+      th.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          sort();
+        }
+      });
+    });
+  });
+
   // ---- Split download button dropdown ----
   document.querySelectorAll(".split-btn").forEach((splitBtn) => {
     const toggle = splitBtn.querySelector(".split-btn-toggle");
