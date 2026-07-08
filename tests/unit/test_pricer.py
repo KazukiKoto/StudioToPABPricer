@@ -141,5 +141,44 @@ def test_write_aggregate_csv_writes_expected_columns_and_totals(tmp_path):
     write_aggregate_csv(rows, out_path)
 
     content = out_path.read_text(encoding="utf-8")
-    assert content.splitlines()[0] == "BLItemNo,PartName,ColorName,Qty,UnitPriceGBP,LineTotalGBP"
+    assert content.splitlines()[0] == "BLItemNo,ElementId,PartName,ColorName,Qty,UnitPriceGBP,LineTotalGBP"
     assert "TOTAL" in content
+
+
+def test_aggregate_csv_round_trips_through_read_brick_rows(tmp_path):
+    """The simple/aggregate download must be re-uploadable: it needs ElementId
+    (read_brick_rows requires it) and its trailing blank/TOTAL rows must be
+    skipped rather than misread as part rows."""
+    rows = [
+        {"BLItemNo": "3005", "ElementId": "4211389", "PartName": "Brick 1 x 1", "ColorName": "Grey",
+         "Qty": "4", "UnitPriceGBP": "0.06", "LineTotalGBP": "0.24"},
+        {"BLItemNo": "3023", "ElementId": "302326", "PartName": "Plate 1 x 2", "ColorName": "Black",
+         "Qty": "6", "UnitPriceGBP": "0.07", "LineTotalGBP": "0.42"},
+    ]
+    out_path = tmp_path / "aggregate.csv"
+    write_aggregate_csv(rows, out_path)
+
+    reread = read_brick_rows(out_path)
+
+    assert len(reread) == 2
+    assert {r["BLItemNo"] for r in reread} == {"3005", "3023"}
+    assert next(r for r in reread if r["BLItemNo"] == "3005")["ElementId"] == "4211389"
+
+
+def test_priced_csv_round_trips_through_read_brick_rows(tmp_path):
+    """The detailed download's extra columns (UnitPriceGBP/LineTotalGBP/
+    Availability) and trailing TOTAL/not-found summary rows must not confuse
+    a re-upload of the file."""
+    rows = [
+        {"BLItemNo": "3005", "ElementId": "4211389", "PartName": "Brick 1 x 1", "Qty": "4",
+         "UnitPriceGBP": "0.06", "LineTotalGBP": "0.24", "Availability": "AVAILABLE"},
+        {"BLItemNo": "3867", "ElementId": "4251286", "PartName": "Baseplate 16 x 16", "Qty": "1",
+         "UnitPriceGBP": "", "LineTotalGBP": "", "Availability": "NOT_FOUND_ON_PAB"},
+    ]
+    out_path = tmp_path / "priced.csv"
+    write_priced_csv(rows, out_path)
+
+    reread = read_brick_rows(out_path)
+
+    assert len(reread) == 2
+    assert {r["BLItemNo"] for r in reread} == {"3005", "3867"}

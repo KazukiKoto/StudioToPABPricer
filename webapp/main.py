@@ -112,7 +112,8 @@ async def security_headers_and_csrf_cookie(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:"
+        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+        "object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
     )
     response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
     return response
@@ -267,6 +268,33 @@ async def _read_and_validate_csv(
     return name, multiplier, rows, None
 
 
+def _extract_manual_overrides(rows: list[dict[str, str]]) -> dict[tuple[str, str], float]:
+    """Pull manual-price overrides out of rows read from a previously-downloaded
+    results CSV (simple or detailed) dropped back into the upload form.
+
+    Only detailed CSVs carry an Availability column, so this is a no-op for
+    simple/aggregate re-uploads -- those have no way to distinguish a manual
+    price from a PAB one, which matches the simple format's existing
+    limitations. Read from the raw uploaded rows (before price_rows() fetches
+    fresh data and overwrites Availability/UnitPriceGBP on its own copies),
+    so a part no longer found on PAB keeps its previous manual price instead
+    of reverting to NOT_FOUND.
+    """
+    overrides: dict[tuple[str, str], float] = {}
+    for row in rows:
+        if row.get("Availability") != "MANUAL":
+            continue
+        raw_price = (row.get("UnitPriceGBP") or "").strip()
+        if not raw_price:
+            continue
+        try:
+            price = float(raw_price)
+        except ValueError:
+            continue
+        overrides[(row["BLItemNo"], row["ElementId"])] = price
+    return overrides
+
+
 def _build_file_entries(valid_files: list[tuple[str, int, list[dict[str, str]]]]) -> list[dict]:
     """Price every row across all files in one batch (so distinct part numbers
     shared between files are only looked up once), then split the priced rows
@@ -317,10 +345,14 @@ async def upload(
             ),
         )
 
+    manual_overrides: dict[tuple[str, str], float] = {}
+    for _, _, rows in valid_files:
+        manual_overrides.update(_extract_manual_overrides(rows))
+
     token = uuid.uuid4().hex
     SESSIONS[token] = {
         "files": _build_file_entries(valid_files),
-        "manual_overrides": {},
+        "manual_overrides": manual_overrides,
         "last_accessed": time.time(),
     }
     _evict_stale_sessions()
@@ -360,6 +392,8 @@ async def add_files(
 
     if valid_files:
         session["files"].extend(_build_file_entries(valid_files))
+        for _, _, rows in valid_files:
+            session["manual_overrides"].update(_extract_manual_overrides(rows))
 
     if errors:
         message = " ".join(errors)

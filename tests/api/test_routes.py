@@ -199,7 +199,7 @@ def test_download_simple_returns_aggregated_csv(app_client, csrf_token):
     resp = app_client.get(f"/download/{token}/simple")
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/csv")
-    assert resp.text.splitlines()[0] == "BLItemNo,PartName,ColorName,Qty,UnitPriceGBP,LineTotalGBP"
+    assert resp.text.splitlines()[0] == "BLItemNo,ElementId,PartName,ColorName,Qty,UnitPriceGBP,LineTotalGBP"
 
 
 def test_download_detailed_returns_full_csv(app_client, csrf_token):
