@@ -114,7 +114,9 @@ def test_qty_update_recalculates_line_total_and_grand_total(app_client, csrf_tok
     assert 'value="10"' in resp.text
     assert "&pound;0.60" in resp.text  # 3005's line total: 10 * 0.06
     assert ">17<" in resp.text  # grand total qty: 10+6+1
-    assert "Quantities updated." in resp.text
+    # No confirmation banner for a plain quantity edit (unlike removal,
+    # below) -- it's not a destructive action, so no need to interrupt.
+    assert 'class="banner banner-info"' not in resp.text
 
 
 def test_qty_update_zero_removes_that_piece(app_client, csrf_token):

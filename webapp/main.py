@@ -520,7 +520,7 @@ async def update_quantities(request: Request, token: str):
     session.setdefault("qty_overrides", {}).update(new_values)
 
     removed = sum(1 for v in new_values.values() if v == 0)
-    message = f"Removed {removed} piece(s) from the batch." if removed else "Quantities updated."
+    message = f"Removed {removed} piece(s) from the batch." if removed else None
     return _render_results(request, token, message=message)
 
 
