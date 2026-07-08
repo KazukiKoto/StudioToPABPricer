@@ -35,7 +35,7 @@ def test_copies_update_rejects_non_integer_atomically(app_client, csrf_token):
     assert "Invalid copies value" in resp.text
     # Neither file's multiplier changed: totals must match the original upload response.
     # 3867 appears in both files: (1 * 3) + (2 * 5) = 13, at the ORIGINAL 3x/5x copies.
-    assert ">13<" in resp.text
+    assert 'value="13"' in resp.text
 
 
 def test_copies_update_rejects_out_of_range_atomically(app_client, csrf_token):
@@ -99,6 +99,111 @@ def test_copies_update_rejects_without_csrf_token(app_client, csrf_token):
 
     resp = app_client.post(f"/session/{token}/copies", data={"copies_0": "2"})
     assert resp.status_code == 403
+
+
+def test_qty_update_recalculates_line_total_and_grand_total(app_client, csrf_token):
+    files, data = _upload_files(csrf_token, ("simple.csv", 1))
+    upload_resp = app_client.post("/upload", files=files, data=data)
+    token = _extract_token(upload_resp.text)
+
+    # idx 0 is 3005 (qty 4, unit price 0.06) in simple.csv's row order.
+    resp = app_client.post(
+        f"/session/{token}/quantities", data={"qty_0": "10", "csrf_token": csrf_token}
+    )
+    assert resp.status_code == 200
+    assert 'value="10"' in resp.text
+    assert "&pound;0.60" in resp.text  # 3005's line total: 10 * 0.06
+    assert ">17<" in resp.text  # grand total qty: 10+6+1
+    # No confirmation banner for a plain quantity edit (unlike removal,
+    # below) -- it's not a destructive action, so no need to interrupt.
+    assert 'class="banner banner-info"' not in resp.text
+
+
+def test_qty_update_zero_removes_that_piece(app_client, csrf_token):
+    files, data = _upload_files(csrf_token, ("simple.csv", 1))
+    upload_resp = app_client.post("/upload", files=files, data=data)
+    token = _extract_token(upload_resp.text)
+
+    resp = app_client.post(
+        f"/session/{token}/quantities", data={"qty_0": "0", "csrf_token": csrf_token}
+    )
+    assert resp.status_code == 200
+    assert "Removed 1 piece(s) from the batch." in resp.text
+    assert ">3005<" not in resp.text
+
+
+def test_qty_update_rejects_non_integer_atomically(app_client, csrf_token):
+    files, data = _upload_files(csrf_token, ("simple.csv", 1))
+    upload_resp = app_client.post("/upload", files=files, data=data)
+    token = _extract_token(upload_resp.text)
+
+    resp = app_client.post(
+        f"/session/{token}/quantities",
+        data={"qty_0": "10", "qty_1": "not-a-number", "csrf_token": csrf_token},
+    )
+    assert resp.status_code == 200
+    assert "Invalid quantity" in resp.text
+    assert 'value="4"' in resp.text  # unchanged: 3005's original qty
+
+
+def test_qty_update_rejects_out_of_range_atomically(app_client, csrf_token):
+    import webapp.main as webapp_main
+
+    files, data = _upload_files(csrf_token, ("simple.csv", 1))
+    upload_resp = app_client.post("/upload", files=files, data=data)
+    token = _extract_token(upload_resp.text)
+
+    resp = app_client.post(
+        f"/session/{token}/quantities",
+        data={"qty_0": str(webapp_main.MAX_QTY + 1), "csrf_token": csrf_token},
+    )
+    assert resp.status_code == 200
+    assert "Quantity must be between 0" in resp.text
+    assert 'value="4"' in resp.text
+
+
+def test_qty_update_rejects_without_csrf_token(app_client, csrf_token):
+    files, data = _upload_files(csrf_token, ("simple.csv", 1))
+    upload_resp = app_client.post("/upload", files=files, data=data)
+    token = _extract_token(upload_resp.text)
+
+    resp = app_client.post(f"/session/{token}/quantities", data={"qty_0": "10"})
+    assert resp.status_code == 403
+
+
+def test_qty_update_unknown_token_redirects_home(app_client, csrf_token):
+    resp = app_client.post(
+        "/session/does-not-exist/quantities", data={"csrf_token": csrf_token}, follow_redirects=False
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/"
+
+
+def test_qty_override_persists_across_copies_update(app_client, csrf_token):
+    """Like manual price overrides, a quantity override is an absolute pin,
+    not a delta -- it should stay put even though the file's copies count
+    (and every other row's quantity) changes elsewhere."""
+    files, data = _upload_files(csrf_token, ("simple.csv", 1))
+    upload_resp = app_client.post("/upload", files=files, data=data)
+    token = _extract_token(upload_resp.text)
+
+    app_client.post(f"/session/{token}/quantities", data={"qty_0": "10", "csrf_token": csrf_token})
+
+    resp = app_client.post(f"/session/{token}/copies", data={"copies_0": "3", "csrf_token": csrf_token})
+    assert resp.status_code == 200
+    assert 'value="10"' in resp.text  # 3005 stays pinned at 10, not scaled to 12
+
+
+def test_found_part_merges_across_files_into_one_row(app_client, csrf_token):
+    """The same part uploaded via two separate CSVs must collapse into a
+    single editable row, not two -- otherwise a quantity edit would be
+    ambiguous about which occurrence it applies to."""
+    files, data = _upload_files(csrf_token, ("simple.csv", 1), ("simple.csv", 1))
+    resp = app_client.post("/upload", files=files, data=data)
+
+    assert resp.status_code == 200
+    assert resp.text.count(">3005<") == 1
+    assert 'value="8"' in resp.text  # 3005's combined qty: 4 + 4
 
 
 def test_manual_price_survives_copies_update_and_rescales(app_client, csrf_token):
@@ -270,3 +375,5 @@ def test_downloads_reflect_copies_update(app_client, csrf_token):
     header = lines[0].split(",")
     total_line = next(line for line in lines if line.startswith("TOTAL"))
     assert total_line.split(",")[header.index("Qty")] == "55"  # (4+6+1)*5
+
+

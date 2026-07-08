@@ -277,6 +277,13 @@ h2 {
   overflow: hidden;
   background: var(--input-bg);
 }
+/* In a table cell, .stepper's default block-flex would stretch to the
+   cell's full width and leave the button group flush-left instead of
+   centered -- inline-flex shrink-wraps it to its own content so the
+   surrounding td's text-align: center (below) actually centers the whole
+   group, regardless of how many digits the quantity has. */
+td:has(.stepper-qty) { text-align: center; }
+.stepper-qty { display: inline-flex; }
 .stepper-btn {
   display: flex;
   align-items: center;
@@ -296,7 +303,7 @@ h2 {
 .stepper-minus { border-right: 2px solid var(--edge); }
 .stepper-plus { border-left: 2px solid var(--edge); }
 .stepper input[type="number"] {
-  width: 2.4rem;
+  width: 3rem;
   border: none;
   border-radius: 0;
   padding: 0;
@@ -584,6 +591,13 @@ h2 {
   overflow-y: auto;
   /* Makes .table-wrap itself the scrolling ancestor, so thead's
      position:sticky actually has something to stick to. */
+
+  /* Reserves the vertical scrollbar's own gutter up front, rather than the
+     scrollbar appearing and eating into the last column's width -- without
+     this, the sticky yellow thead's rightmost cell can end up rendering
+     partly underneath/clipped by the scrollbar instead of stopping cleanly
+     beside it. */
+  scrollbar-gutter: stable;
 }
 
 /* Themed scrollbar for the bounded-height panels (tables + batch file
@@ -625,6 +639,7 @@ thead th {
   color: #161616;
   position: sticky;
   top: 0;
+  z-index: 1;
   text-transform: uppercase;
   font-size: 0.75rem;
   letter-spacing: 0.04em;
@@ -641,6 +656,29 @@ input[type="number"] {
   background: var(--input-bg);
   color: var(--ink);
 }
+
+/* Clickable/sortable column headers, replacing the table search box --
+   click toggles ascending/descending on that column; an arrow indicator
+   shows the active column and direction. */
+.sortable-col {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.sortable-col:hover { background: #ffd633; }
+.sortable-col:focus-visible {
+  outline: 2px solid var(--edge);
+  outline-offset: -2px;
+}
+.sortable-col::after {
+  content: "";
+  display: inline-block;
+  width: 0.6em;
+  margin-left: 0.35em;
+  opacity: 0.4;
+}
+.sortable-col.sort-asc::after { content: "\25B2"; opacity: 1; }
+.sortable-col.sort-desc::after { content: "\25BC"; opacity: 1; }
 
 .badge {
   display: inline-block;

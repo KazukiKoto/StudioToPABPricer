@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import csv
+import time
 
 import pytest
 
 from pab_pricer.pricer import (
     aggregate_rows,
-    merge_unpriced_duplicates,
+    merge_duplicate_parts,
     price_rows,
     read_brick_rows,
     write_aggregate_csv,
@@ -51,6 +52,43 @@ def test_price_rows_prices_known_parts_and_flags_unknown_ones():
     assert by_part["3867"]["LineTotalGBP"] == ""
 
 
+def test_price_rows_with_concurrent_workers_is_still_correct():
+    """Same fixture/assertions as the serial-fetch test above, but forcing
+    multiple concurrent workers -- the concurrency must not change which
+    part gets which price, or race on the shared cache dict."""
+    rows = read_brick_rows(FIXTURES_DIR / "simple.csv")
+    priced = price_rows(rows, fetcher=fake_fetch_part_siblings, delay=0, max_workers=8)
+
+    by_part = {r["BLItemNo"]: r for r in priced}
+    assert by_part["3005"]["Availability"] == "AVAILABLE"
+    assert by_part["3005"]["UnitPriceGBP"] == "0.06"
+    assert by_part["3005"]["LineTotalGBP"] == "0.24"
+    assert by_part["3867"]["Availability"] == "NOT_FOUND_ON_PAB"
+
+
+def test_price_rows_fetches_distinct_parts_concurrently():
+    """Regression test for the actual point of max_workers: with a fetcher
+    that sleeps, several distinct part numbers looked up with max_workers=5
+    must overlap in time rather than run one after another -- otherwise this
+    is no faster than the old strictly-serial loop."""
+    rows = [
+        {"BLItemNo": str(n), "ElementId": "1", "PartName": "Part", "Qty": "1"}
+        for n in range(5)
+    ]
+
+    def slow_fetch(part_number, locale="en-gb", timeout=15.0, retries=3):
+        time.sleep(0.2)
+        return {}
+
+    start = time.perf_counter()
+    price_rows(rows, fetcher=slow_fetch, delay=0, max_workers=5)
+    elapsed = time.perf_counter() - start
+
+    # Serial would take ~1.0s (5 * 0.2s); concurrent should take close to a
+    # single 0.2s slot. Generous bound to avoid flaking on a loaded CI box.
+    assert elapsed < 0.8
+
+
 def test_price_rows_default_fetcher_can_be_monkeypatched(patch_fetcher):
     """Guards the exact mechanism webapp.main relies on: callers that don't
     pass `fetcher` explicitly must still pick up a monkeypatched
@@ -60,27 +98,49 @@ def test_price_rows_default_fetcher_can_be_monkeypatched(patch_fetcher):
     assert any(r["Availability"] == "AVAILABLE" for r in priced)
 
 
-def test_merge_unpriced_duplicates_combines_same_missing_piece():
+def test_merge_duplicate_parts_combines_same_missing_piece():
     rows = [
-        {"BLItemNo": "3867", "ElementId": "4251286", "Qty": "2", "Availability": "NOT_FOUND_ON_PAB"},
-        {"BLItemNo": "3867", "ElementId": "4251286", "Qty": "5", "Availability": "NOT_FOUND_ON_PAB"},
-        {"BLItemNo": "3005", "ElementId": "4211389", "Qty": "4", "Availability": "AVAILABLE"},
+        {"BLItemNo": "3867", "ElementId": "4251286", "Qty": "2", "Availability": "NOT_FOUND_ON_PAB",
+         "UnitPriceGBP": "", "LineTotalGBP": ""},
+        {"BLItemNo": "3867", "ElementId": "4251286", "Qty": "5", "Availability": "NOT_FOUND_ON_PAB",
+         "UnitPriceGBP": "", "LineTotalGBP": ""},
+        {"BLItemNo": "3005", "ElementId": "4211389", "Qty": "4", "Availability": "AVAILABLE",
+         "UnitPriceGBP": "0.06", "LineTotalGBP": "0.24"},
     ]
-    merged = merge_unpriced_duplicates(rows)
+    merged = merge_duplicate_parts(rows)
 
     not_found = [r for r in merged if r["Availability"] == "NOT_FOUND_ON_PAB"]
     assert len(not_found) == 1
     assert not_found[0]["Qty"] == "7"
-    # Found rows pass through untouched, including duplicates of the same part.
     assert len([r for r in merged if r["Availability"] == "AVAILABLE"]) == 1
 
 
-def test_merge_unpriced_duplicates_keeps_distinct_pieces_separate():
+def test_merge_duplicate_parts_combines_same_found_piece_and_recomputes_total():
+    """Found rows for the same piece (e.g. the same brick used in two
+    different uploaded sub-model CSVs) are combined too, not just not-found
+    ones -- otherwise a per-row quantity edit on the results page would be
+    ambiguous about which of two rows for the same part it applies to."""
     rows = [
-        {"BLItemNo": "3867", "ElementId": "4251286", "Qty": "1", "Availability": "NOT_FOUND_ON_PAB"},
-        {"BLItemNo": "9999", "ElementId": "1234567", "Qty": "3", "Availability": "NOT_FOUND_ON_PAB"},
+        {"BLItemNo": "3005", "ElementId": "4211389", "Qty": "4", "Availability": "AVAILABLE",
+         "UnitPriceGBP": "0.06", "LineTotalGBP": "0.24"},
+        {"BLItemNo": "3005", "ElementId": "4211389", "Qty": "20", "Availability": "AVAILABLE",
+         "UnitPriceGBP": "0.06", "LineTotalGBP": "1.20"},
     ]
-    merged = merge_unpriced_duplicates(rows)
+    merged = merge_duplicate_parts(rows)
+
+    assert len(merged) == 1
+    assert merged[0]["Qty"] == "24"
+    assert merged[0]["LineTotalGBP"] == "1.44"
+
+
+def test_merge_duplicate_parts_keeps_distinct_pieces_separate():
+    rows = [
+        {"BLItemNo": "3867", "ElementId": "4251286", "Qty": "1", "Availability": "NOT_FOUND_ON_PAB",
+         "UnitPriceGBP": "", "LineTotalGBP": ""},
+        {"BLItemNo": "9999", "ElementId": "1234567", "Qty": "3", "Availability": "NOT_FOUND_ON_PAB",
+         "UnitPriceGBP": "", "LineTotalGBP": ""},
+    ]
+    merged = merge_duplicate_parts(rows)
     assert len(merged) == 2
 
 

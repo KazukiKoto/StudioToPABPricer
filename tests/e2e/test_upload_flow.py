@@ -306,3 +306,55 @@ def test_dark_mode_toggle_persists(page, live_server):
     page.reload()
     page.wait_for_selector("#theme-toggle")
     assert page.evaluate("document.documentElement.getAttribute('data-theme')") == toggled
+
+
+def test_column_header_click_sorts_table_rows(page, live_server):
+    """Stage 3 acceptance criterion (superseding the original search/filter
+    idea, per feedback that a search box didn't fit here): clicking a
+    column header sorts that table's rows, without a full page reload."""
+    page.goto(live_server)
+    page.wait_for_selector("#file-rows .file-row")
+    page.locator('input[type="file"]').first.set_input_files(str(FIXTURES_DIR / "simple.csv"))
+    page.click('button[type="submit"]', timeout=60000)
+    page.wait_for_selector(".summary-cards", timeout=60000)
+
+    priced_table = page.locator(".table-scroll table").first
+    rows = priced_table.locator("tbody tr")
+    expect(rows).to_have_count(2)
+    assert "3005" in rows.nth(0).inner_text()
+    assert "3023" in rows.nth(1).inner_text()
+
+    page.evaluate("window.__noReloadMarker = 'still-here'")
+
+    part_header = priced_table.locator("thead th").first
+    part_header.click()  # ascending -- already the default order, no visible change
+    part_header.click()  # descending -- flips it
+
+    sorted_rows = priced_table.locator("tbody tr")
+    assert "3023" in sorted_rows.nth(0).inner_text()
+    assert "3005" in sorted_rows.nth(1).inner_text()
+    assert page.evaluate("window.__noReloadMarker") == "still-here"
+    expect(part_header).to_have_class("sortable-col sort-desc")
+
+
+def test_column_header_sorts_qty_numerically_by_live_input_value(page, live_server):
+    """Numeric sort (not lexical), and driven by the Qty stepper's current
+    input value rather than the cell's static markup (which is just the
+    +/- buttons)."""
+    page.goto(live_server)
+    page.wait_for_selector("#file-rows .file-row")
+    page.locator('input[type="file"]').first.set_input_files(str(FIXTURES_DIR / "simple.csv"))
+    page.click('button[type="submit"]', timeout=60000)
+    page.wait_for_selector(".summary-cards", timeout=60000)
+
+    priced_table = page.locator(".table-scroll table").first
+    qty_header = priced_table.locator("thead th").nth(3)
+
+    # 3005 qty=4, 3023 qty=6.
+    qty_header.click()  # ascending: smaller qty first
+    rows = priced_table.locator("tbody tr")
+    assert "3005" in rows.nth(0).inner_text()
+
+    qty_header.click()  # descending: larger qty first
+    rows = priced_table.locator("tbody tr")
+    assert "3023" in rows.nth(0).inner_text()

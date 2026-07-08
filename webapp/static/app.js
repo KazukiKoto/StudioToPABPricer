@@ -271,6 +271,58 @@ function initMainContent() {
     });
   }
 
+  // ---- Per-row Qty editing (Priced bricks + Not found tables) ----
+  // Every .qty-input targets #quantities-form via its `form` attribute
+  // rather than DOM nesting (it lives inside whichever table row it's in,
+  // possibly inside the not-found table's own /finalize form) -- FormData
+  // still picks up form-associated inputs regardless of DOM position, so
+  // submitViaAjax(quantitiesForm) captures all of them correctly.
+  //
+  // Each Qty cell uses the same .stepper +/- widget as the "Files" batch
+  // list and the upload page's copies control, rather than the browser's
+  // own number-input arrows, so quantity editing looks and behaves the
+  // same everywhere on the site.
+  const quantitiesForm = document.getElementById("quantities-form");
+  if (quantitiesForm) {
+    quantitiesForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      submitViaAjax(quantitiesForm);
+    });
+
+    document.querySelectorAll(".stepper-qty").forEach((stepper) => {
+      const input = stepper.querySelector(".qty-input");
+      const minusBtn = stepper.querySelector(".stepper-minus");
+      const plusBtn = stepper.querySelector(".stepper-plus");
+      const original = input.value;
+      const label = input.dataset.partLabel || "this part";
+
+      async function commit(newValue) {
+        const max = parseInt(input.max, 10) || Infinity;
+        const clamped = Math.min(max, Math.max(0, newValue));
+        if (clamped === 0) {
+          const confirmed = await showConfirm(`Remove all ${label} from this batch?`);
+          if (!confirmed) {
+            input.value = original;
+            return;
+          }
+        }
+        input.value = clamped;
+        submitViaAjax(quantitiesForm);
+      }
+
+      minusBtn.addEventListener("click", () => commit((parseInt(input.value, 10) || 0) - 1));
+      plusBtn.addEventListener("click", () => commit((parseInt(input.value, 10) || 0) + 1));
+      input.addEventListener("change", () => {
+        const value = parseInt(input.value, 10);
+        if (Number.isNaN(value) || value < 0) {
+          input.value = original;
+          return;
+        }
+        commit(value);
+      });
+    });
+  }
+
   // ---- "Files" dropdown open/close ----
   const batchToggle = document.getElementById("batch-dropdown-toggle");
   const batchPanel = document.getElementById("batch-dropdown-panel");
@@ -412,6 +464,52 @@ function initMainContent() {
       input.value = 0;
       const stepperForm = row.closest("form");
       submitViaAjax(stepperForm);
+    });
+  });
+
+  // ---- Sortable table columns (Priced bricks + Not found tables) ----
+  // Click a header to sort that table's rows by that column, toggling
+  // ascending/descending on repeated clicks; numeric-looking columns sort
+  // numerically, everything else alphabetically. Cells that hold an
+  // editable input (Qty, manual price) sort by the input's current value,
+  // not its static markup.
+  function cellSortValue(cell) {
+    const input = cell.querySelector("input");
+    if (input) return input.value.trim();
+    return cell.textContent.trim();
+  }
+
+  document.querySelectorAll(".sortable-table").forEach((table) => {
+    const headers = Array.from(table.querySelectorAll("thead th"));
+    const tbody = table.querySelector("tbody");
+    if (!tbody) return;
+
+    headers.forEach((th, colIndex) => {
+      function sort() {
+        const dir = th.classList.contains("sort-asc") ? "desc" : "asc";
+        headers.forEach((h) => h.classList.remove("sort-asc", "sort-desc"));
+        th.classList.add(dir === "asc" ? "sort-asc" : "sort-desc");
+
+        const rows = Array.from(tbody.querySelectorAll("tr"));
+        rows.sort((a, b) => {
+          const aVal = cellSortValue(a.children[colIndex]);
+          const bVal = cellSortValue(b.children[colIndex]);
+          const aNum = parseFloat(aVal.replace(/[^0-9.-]/g, ""));
+          const bNum = parseFloat(bVal.replace(/[^0-9.-]/g, ""));
+          const bothNumeric = aVal !== "" && bVal !== "" && !Number.isNaN(aNum) && !Number.isNaN(bNum);
+          const cmp = bothNumeric ? aNum - bNum : aVal.localeCompare(bVal);
+          return dir === "asc" ? cmp : -cmp;
+        });
+        rows.forEach((row) => tbody.appendChild(row));
+      }
+
+      th.addEventListener("click", sort);
+      th.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          sort();
+        }
+      });
     });
   });
 

@@ -18,16 +18,18 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from pab_pricer.pricer import (
-    merge_unpriced_duplicates,
+    merge_duplicate_parts,
     price_rows,
     read_brick_rows,
     write_aggregate_csv,
     write_priced_csv,
 )
+from webapp.session_store import SQLiteSessionStore
 
 BASE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = BASE_DIR.parent
 OUTPUTS_DIR = REPO_ROOT / "outputs"
+SESSIONS_DB_PATH = REPO_ROOT / "outputs" / "sessions.db"
 LOCALE = "en-gb"  # pins pricing to GBP
 
 # LEGO/BrickLink CSV exports are served under a handful of MIME types
@@ -46,6 +48,7 @@ ALLOWED_CSV_CONTENT_TYPES = {
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB per CSV
 MAX_FILES_PER_UPLOAD = 64
 MAX_MULTIPLIER = 256
+MAX_QTY = 100_000  # per-row quantity edits on the results page
 
 # In-memory sessions never expire on their own, so a long-lived deployment
 # needs an eviction policy: sessions older than the TTL, or beyond the count
@@ -119,24 +122,18 @@ async def security_headers_and_csrf_cookie(request: Request, call_next):
     return response
 
 
-# In-memory per-upload state. Fine for a handful of concurrent users behind a
-# single process; not multi-worker safe and not persisted across restarts
-# (see plan/results-page-overhaul.md Stage 3 for a possible SQLite upgrade).
-SESSIONS: dict[str, dict] = {}
+# Per-upload state, persisted to SQLite (webapp/session_store.py) so sessions
+# survive a process restart/redeploy instead of vanishing with an in-memory
+# dict. __getitem__ returns a fresh deserialized copy on every access -- any
+# route that mutates a fetched session dict in place must write it back
+# (SESSIONS[token] = session) for the change to actually persist.
+SESSIONS = SQLiteSessionStore(SESSIONS_DB_PATH)
 
 NOT_FOUND_STATUSES = {"NOT_FOUND_ON_PAB"}
 
 
 def _evict_stale_sessions() -> None:
-    now = time.time()
-    expired = [tok for tok, sess in SESSIONS.items() if now - sess["last_accessed"] > SESSION_TTL_SECONDS]
-    for tok in expired:
-        del SESSIONS[tok]
-
-    if len(SESSIONS) > MAX_SESSIONS:
-        oldest_first = sorted(SESSIONS.items(), key=lambda item: item[1]["last_accessed"])
-        for tok, _ in oldest_first[: len(SESSIONS) - MAX_SESSIONS]:
-            del SESSIONS[tok]
+    SESSIONS.evict(SESSION_TTL_SECONDS, MAX_SESSIONS)
 
 
 def _summary(rows: list[dict]) -> dict:
@@ -174,7 +171,8 @@ def _source_name(session: dict) -> str:
 
 def _materialize(session: dict) -> list[dict[str, str]]:
     """Derive the current, flattened, priced row list from a session's
-    per-file base rows + live copy counts + any manual price overrides.
+    per-file base rows + live copy counts + any quantity/manual price
+    overrides.
 
     Recomputed on every render rather than stored, so changing one file's
     copy count (or adding/removing a file) never needs to touch the others'
@@ -185,7 +183,27 @@ def _materialize(session: dict) -> list[dict[str, str]]:
         for file_entry in session["files"]
         for row in file_entry["base_rows"]
     ]
-    merged = merge_unpriced_duplicates(scaled_rows)
+    merged = merge_duplicate_parts(scaled_rows)
+
+    # Quantity overrides are an absolute pin, not a delta -- like manual price
+    # overrides, once a user sets one it wins regardless of later copies/file
+    # changes elsewhere in the batch, until they change or remove it. Applied
+    # before manual-price overrides below so a manually-priced row's
+    # recomputed LineTotalGBP uses the already-overridden quantity.
+    qty_overrides = session.get("qty_overrides", {})
+    if qty_overrides:
+        adjusted = []
+        for row in merged:
+            key = (row["BLItemNo"], row["ElementId"])
+            if key in qty_overrides:
+                qty = qty_overrides[key]
+                if qty <= 0:
+                    continue  # 0 removes that piece from the batch entirely
+                row["Qty"] = str(qty)
+                if row["UnitPriceGBP"]:
+                    row["LineTotalGBP"] = f"{float(row['UnitPriceGBP']) * qty:.2f}"
+            adjusted.append(row)
+        merged = adjusted
 
     overrides = session.get("manual_overrides", {})
     for row in merged:
@@ -202,6 +220,7 @@ def _materialize(session: dict) -> list[dict[str, str]]:
 def _render_results(request: Request, token: str, message: str | None = None) -> HTMLResponse:
     session = SESSIONS[token]
     session["last_accessed"] = time.time()
+    SESSIONS[token] = session
     rows = _materialize(session)
     indexed_rows = list(enumerate(rows))
     return templates.TemplateResponse(
@@ -216,6 +235,7 @@ def _render_results(request: Request, token: str, message: str | None = None) ->
             "message": message,
             "csrf_token": request.state.csrf_token,
             "max_multiplier": MAX_MULTIPLIER,
+            "max_qty": MAX_QTY,
             **_summary(rows),
         },
     )
@@ -353,6 +373,7 @@ async def upload(
     SESSIONS[token] = {
         "files": _build_file_entries(valid_files),
         "manual_overrides": manual_overrides,
+        "qty_overrides": {},
         "last_accessed": time.time(),
     }
     _evict_stale_sessions()
@@ -394,6 +415,7 @@ async def add_files(
         session["files"].extend(_build_file_entries(valid_files))
         for _, _, rows in valid_files:
             session["manual_overrides"].update(_extract_manual_overrides(rows))
+        SESSIONS[token] = session
 
     if errors:
         message = " ".join(errors)
@@ -450,7 +472,55 @@ async def update_copies(request: Request, token: str):
         del SESSIONS[token]
         return RedirectResponse("/", status_code=303)
 
+    SESSIONS[token] = session
     message = f"Removed {', '.join(removed_names)}." if removed_names else None
+    return _render_results(request, token, message=message)
+
+
+@app.post("/session/{token}/quantities", response_class=HTMLResponse)
+async def update_quantities(request: Request, token: str):
+    """Per-piece quantity editor: each row's Qty field on the results page
+    (both the priced and not-found tables) submits here. Setting a row's
+    quantity to 0 removes just that piece from the batch (the client confirms
+    with the user first, mirroring the per-file copies remove-at-zero
+    behaviour). Overrides are keyed by (BLItemNo, ElementId) and, like manual
+    price overrides, persist as an absolute value until changed again --
+    see _materialize()."""
+    session = SESSIONS.get(token)
+    if not session:
+        return RedirectResponse("/", status_code=303)
+
+    form = await request.form()
+    _verify_csrf(request, form.get("csrf_token"))
+    session["last_accessed"] = time.time()
+
+    rows = _materialize(session)
+
+    # Validate everything before changing anything, so a single bad field
+    # can't leave the session in a half-updated state.
+    new_values: dict[tuple[str, str], int] = {}
+    for idx, row in enumerate(rows):
+        raw = form.get(f"qty_{idx}")
+        if raw is None:
+            continue
+        try:
+            value = int(raw)
+        except ValueError:
+            return _render_results(request, token, message=f"Invalid quantity {raw!r}; no changes made.")
+        if value < 0 or value > MAX_QTY:
+            return _render_results(
+                request, token, message=f"Quantity must be between 0 and {MAX_QTY}; no changes made."
+            )
+        new_values[(row["BLItemNo"], row["ElementId"])] = value
+
+    if not new_values:
+        return _render_results(request, token)
+
+    session.setdefault("qty_overrides", {}).update(new_values)
+    SESSIONS[token] = session
+
+    removed = sum(1 for v in new_values.values() if v == 0)
+    message = f"Removed {removed} piece(s) from the batch." if removed else None
     return _render_results(request, token, message=message)
 
 
@@ -480,6 +550,7 @@ async def finalize(request: Request, token: str):
         overrides[(row["BLItemNo"], row["ElementId"])] = price
         updated += 1
 
+    SESSIONS[token] = session
     message = f"Updated {updated} manual price(s)." if updated else "No manual prices entered."
     return _render_results(request, token, message=message)
 
@@ -496,6 +567,7 @@ def download_simple(token: str):
     if not session:
         return RedirectResponse("/", status_code=303)
     session["last_accessed"] = time.time()
+    SESSIONS[token] = session
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = OUTPUTS_DIR / f"{timestamp}_simple_{token[:8]}.csv"
@@ -514,6 +586,7 @@ def download_detailed(token: str):
     if not session:
         return RedirectResponse("/", status_code=303)
     session["last_accessed"] = time.time()
+    SESSIONS[token] = session
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = OUTPUTS_DIR / f"{timestamp}_detailed_{token[:8]}.csv"
