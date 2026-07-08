@@ -45,14 +45,17 @@ def patch_fetcher(monkeypatch):
 
 @pytest.fixture
 def app_client(tmp_path, patch_fetcher, monkeypatch):
-    """A FastAPI TestClient wired to a clean, per-test SESSIONS dict and a
-    scratch OUTPUTS_DIR, so tests never touch the repo's real outputs/ folder
-    or leak state between tests."""
+    """A FastAPI TestClient wired to a clean, per-test SQLite session store and
+    a scratch OUTPUTS_DIR, so tests never touch the repo's real outputs/
+    folder or leak state between tests. Uses the real SQLiteSessionStore
+    (not a plain dict) so the persistence path itself is exercised by every
+    existing test, not just the dedicated persistence test."""
     from fastapi.testclient import TestClient
 
     import webapp.main as webapp_main
+    from webapp.session_store import SQLiteSessionStore
 
-    monkeypatch.setattr(webapp_main, "SESSIONS", {})
+    monkeypatch.setattr(webapp_main, "SESSIONS", SQLiteSessionStore(tmp_path / "sessions.db"))
     monkeypatch.setattr(webapp_main, "OUTPUTS_DIR", tmp_path)
 
     with TestClient(webapp_main.app) as client:

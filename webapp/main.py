@@ -24,10 +24,12 @@ from pab_pricer.pricer import (
     write_aggregate_csv,
     write_priced_csv,
 )
+from webapp.session_store import SQLiteSessionStore
 
 BASE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = BASE_DIR.parent
 OUTPUTS_DIR = REPO_ROOT / "outputs"
+SESSIONS_DB_PATH = REPO_ROOT / "outputs" / "sessions.db"
 LOCALE = "en-gb"  # pins pricing to GBP
 
 # LEGO/BrickLink CSV exports are served under a handful of MIME types
@@ -120,24 +122,18 @@ async def security_headers_and_csrf_cookie(request: Request, call_next):
     return response
 
 
-# In-memory per-upload state. Fine for a handful of concurrent users behind a
-# single process; not multi-worker safe and not persisted across restarts
-# (see plan/results-page-overhaul.md Stage 3 for a possible SQLite upgrade).
-SESSIONS: dict[str, dict] = {}
+# Per-upload state, persisted to SQLite (webapp/session_store.py) so sessions
+# survive a process restart/redeploy instead of vanishing with an in-memory
+# dict. __getitem__ returns a fresh deserialized copy on every access -- any
+# route that mutates a fetched session dict in place must write it back
+# (SESSIONS[token] = session) for the change to actually persist.
+SESSIONS = SQLiteSessionStore(SESSIONS_DB_PATH)
 
 NOT_FOUND_STATUSES = {"NOT_FOUND_ON_PAB"}
 
 
 def _evict_stale_sessions() -> None:
-    now = time.time()
-    expired = [tok for tok, sess in SESSIONS.items() if now - sess["last_accessed"] > SESSION_TTL_SECONDS]
-    for tok in expired:
-        del SESSIONS[tok]
-
-    if len(SESSIONS) > MAX_SESSIONS:
-        oldest_first = sorted(SESSIONS.items(), key=lambda item: item[1]["last_accessed"])
-        for tok, _ in oldest_first[: len(SESSIONS) - MAX_SESSIONS]:
-            del SESSIONS[tok]
+    SESSIONS.evict(SESSION_TTL_SECONDS, MAX_SESSIONS)
 
 
 def _summary(rows: list[dict]) -> dict:
@@ -224,6 +220,7 @@ def _materialize(session: dict) -> list[dict[str, str]]:
 def _render_results(request: Request, token: str, message: str | None = None) -> HTMLResponse:
     session = SESSIONS[token]
     session["last_accessed"] = time.time()
+    SESSIONS[token] = session
     rows = _materialize(session)
     indexed_rows = list(enumerate(rows))
     return templates.TemplateResponse(
@@ -418,6 +415,7 @@ async def add_files(
         session["files"].extend(_build_file_entries(valid_files))
         for _, _, rows in valid_files:
             session["manual_overrides"].update(_extract_manual_overrides(rows))
+        SESSIONS[token] = session
 
     if errors:
         message = " ".join(errors)
@@ -474,6 +472,7 @@ async def update_copies(request: Request, token: str):
         del SESSIONS[token]
         return RedirectResponse("/", status_code=303)
 
+    SESSIONS[token] = session
     message = f"Removed {', '.join(removed_names)}." if removed_names else None
     return _render_results(request, token, message=message)
 
@@ -518,6 +517,7 @@ async def update_quantities(request: Request, token: str):
         return _render_results(request, token)
 
     session.setdefault("qty_overrides", {}).update(new_values)
+    SESSIONS[token] = session
 
     removed = sum(1 for v in new_values.values() if v == 0)
     message = f"Removed {removed} piece(s) from the batch." if removed else None
@@ -550,6 +550,7 @@ async def finalize(request: Request, token: str):
         overrides[(row["BLItemNo"], row["ElementId"])] = price
         updated += 1
 
+    SESSIONS[token] = session
     message = f"Updated {updated} manual price(s)." if updated else "No manual prices entered."
     return _render_results(request, token, message=message)
 
@@ -566,6 +567,7 @@ def download_simple(token: str):
     if not session:
         return RedirectResponse("/", status_code=303)
     session["last_accessed"] = time.time()
+    SESSIONS[token] = session
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = OUTPUTS_DIR / f"{timestamp}_simple_{token[:8]}.csv"
@@ -584,6 +586,7 @@ def download_detailed(token: str):
     if not session:
         return RedirectResponse("/", status_code=303)
     session["last_accessed"] = time.time()
+    SESSIONS[token] = session
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = OUTPUTS_DIR / f"{timestamp}_detailed_{token[:8]}.csv"

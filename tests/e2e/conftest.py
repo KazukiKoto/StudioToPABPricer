@@ -16,6 +16,7 @@ import pytest
 import uvicorn
 
 from tests.conftest import fake_fetch_part_siblings
+from webapp.session_store import SQLiteSessionStore
 
 
 def _free_port() -> int:
@@ -31,7 +32,9 @@ def live_server(tmp_path_factory):
 
     original_fetcher = pricer_module.fetch_part_siblings
     pricer_module.fetch_part_siblings = fake_fetch_part_siblings
-    webapp_main.OUTPUTS_DIR = tmp_path_factory.mktemp("e2e-outputs")
+    e2e_dir = tmp_path_factory.mktemp("e2e-outputs")
+    webapp_main.OUTPUTS_DIR = e2e_dir
+    webapp_main.SESSIONS = SQLiteSessionStore(e2e_dir / "sessions.db")
 
     port = _free_port()
     config = uvicorn.Config(webapp_main.app, host="127.0.0.1", port=port, log_level="warning")

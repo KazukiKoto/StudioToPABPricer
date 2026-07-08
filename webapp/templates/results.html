@@ -150,16 +150,16 @@
 
     <h2>Priced bricks</h2>
     <div class="table-wrap table-scroll">
-      <table>
+      <table class="sortable-table">
         <thead>
           <tr>
-            <th>Part</th>
-            <th>Name</th>
-            <th>Colour</th>
-            <th>Qty</th>
-            <th>Unit price</th>
-            <th>Line total</th>
-            <th>Status</th>
+            <th class="sortable-col" tabindex="0" role="button">Part</th>
+            <th class="sortable-col" tabindex="0" role="button">Name</th>
+            <th class="sortable-col" tabindex="0" role="button">Colour</th>
+            <th class="sortable-col" tabindex="0" role="button">Qty</th>
+            <th class="sortable-col" tabindex="0" role="button">Unit price</th>
+            <th class="sortable-col" tabindex="0" role="button">Line total</th>
+            <th class="sortable-col" tabindex="0" role="button">Status</th>
           </tr>
         </thead>
         <tbody>
@@ -204,16 +204,16 @@
     <form action="/finalize/{{ token }}" method="post">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
       <div class="table-wrap table-scroll">
-        <table>
+        <table class="sortable-table">
           <thead>
             <tr>
-              <th>Part</th>
-              <th>Name</th>
-              <th>Colour</th>
-              <th>Qty</th>
-              <th>Manual unit price (GBP)</th>
-              <th>Line total</th>
-              <th>Status</th>
+              <th class="sortable-col" tabindex="0" role="button">Part</th>
+              <th class="sortable-col" tabindex="0" role="button">Name</th>
+              <th class="sortable-col" tabindex="0" role="button">Colour</th>
+              <th class="sortable-col" tabindex="0" role="button">Qty</th>
+              <th class="sortable-col" tabindex="0" role="button">Manual unit price (GBP)</th>
+              <th class="sortable-col" tabindex="0" role="button">Line total</th>
+              <th class="sortable-col" tabindex="0" role="button">Status</th>
             </tr>
           </thead>
           <tbody>
