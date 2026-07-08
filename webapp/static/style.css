@@ -642,6 +642,10 @@ input[type="number"] {
   color: var(--ink);
 }
 
+/* Narrower than the default number input -- integer quantities need far
+   less width than the manual-price column's decimal values. */
+.qty-input { width: 68px; }
+
 .badge {
   display: inline-block;
   padding: 0.2rem 0.65rem;

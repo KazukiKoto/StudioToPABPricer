@@ -271,6 +271,40 @@ function initMainContent() {
     });
   }
 
+  // ---- Per-row Qty editing (Priced bricks + Not found tables) ----
+  // Every .qty-input targets #quantities-form via its `form` attribute
+  // rather than DOM nesting (it lives inside whichever table row it's in,
+  // possibly inside the not-found table's own /finalize form) -- FormData
+  // still picks up form-associated inputs regardless of DOM position, so
+  // submitViaAjax(quantitiesForm) captures all of them correctly.
+  const quantitiesForm = document.getElementById("quantities-form");
+  if (quantitiesForm) {
+    quantitiesForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      submitViaAjax(quantitiesForm);
+    });
+
+    document.querySelectorAll(".qty-input").forEach((input) => {
+      const original = input.value;
+      input.addEventListener("change", async () => {
+        const value = parseInt(input.value, 10);
+        if (Number.isNaN(value) || value < 0) {
+          input.value = original;
+          return;
+        }
+        if (value === 0) {
+          const label = input.dataset.partLabel || "this part";
+          const confirmed = await showConfirm(`Remove all ${label} from this batch?`);
+          if (!confirmed) {
+            input.value = original;
+            return;
+          }
+        }
+        submitViaAjax(quantitiesForm);
+      });
+    });
+  }
+
   // ---- "Files" dropdown open/close ----
   const batchToggle = document.getElementById("batch-dropdown-toggle");
   const batchPanel = document.getElementById("batch-dropdown-panel");

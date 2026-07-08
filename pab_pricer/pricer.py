@@ -186,21 +186,28 @@ def price_rows(
     return priced_rows
 
 
-def merge_unpriced_duplicates(rows: list[dict[str, str]]) -> list[dict[str, str]]:
-    """Combine rows for the same piece (BLItemNo + ElementId) that weren't found on
-    PAB into a single row with the combined quantity, so the same missing piece
-    isn't listed once per source CSV it appeared in."""
+def merge_duplicate_parts(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Combine rows for the same piece (BLItemNo + ElementId) into a single row
+    with the combined quantity, so the same piece isn't listed once per source
+    CSV it appeared in -- regardless of whether it was found on PAB.
+
+    Availability/UnitPriceGBP don't need reconciling across a group: price_rows
+    fetches each part number once and applies the identical result to every row
+    referencing it, so every row sharing a key already agrees on those fields
+    before this runs. Only Qty (and the LineTotalGBP derived from it) actually
+    need combining.
+    """
     merged: list[dict[str, str]] = []
     groups: dict[tuple[str, str], dict[str, str]] = {}
 
     for row in rows:
-        if row["Availability"] != "NOT_FOUND_ON_PAB":
-            merged.append(row)
-            continue
         key = (row["BLItemNo"], row["ElementId"])
         if key in groups:
             existing = groups[key]
-            existing["Qty"] = str(int(existing["Qty"]) + int(row["Qty"]))
+            qty = int(existing["Qty"]) + int(row["Qty"])
+            existing["Qty"] = str(qty)
+            if existing.get("UnitPriceGBP"):
+                existing["LineTotalGBP"] = f"{float(existing['UnitPriceGBP']) * qty:.2f}"
         else:
             new_row = dict(row)
             groups[key] = new_row
