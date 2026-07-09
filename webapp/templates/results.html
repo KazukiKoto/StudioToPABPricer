@@ -150,7 +150,7 @@
 
     <h2>Priced bricks</h2>
     <div class="table-wrap table-scroll">
-      <table class="sortable-table">
+      <table class="sortable-table" data-table-id="priced">
         <thead>
           <tr>
             <th class="sortable-col" tabindex="0" role="button">Part</th>
@@ -204,7 +204,7 @@
     <form action="/finalize/{{ token }}" method="post">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
       <div class="table-wrap table-scroll">
-        <table class="sortable-table">
+        <table class="sortable-table" data-table-id="not-found">
           <thead>
             <tr>
               <th class="sortable-col" tabindex="0" role="button">Part</th>
@@ -247,6 +247,8 @@
                     step="0.0001"
                     min="0"
                     name="manual_price_{{ idx }}"
+                    class="manual-price-input"
+                    data-part-key="{{ row.BLItemNo }}|{{ row.ElementId }}"
                     placeholder="e.g. 0.15"
                     value="{{ row.UnitPriceGBP if row.Availability == 'MANUAL' else '' }}"
                   />
