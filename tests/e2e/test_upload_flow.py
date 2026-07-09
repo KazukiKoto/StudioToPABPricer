@@ -358,3 +358,55 @@ def test_column_header_sorts_qty_numerically_by_live_input_value(page, live_serv
     qty_header.click()  # descending: larger qty first
     rows = priced_table.locator("tbody tr")
     assert "3023" in rows.nth(0).inner_text()
+
+
+def test_sort_survives_a_quantity_edit(page, live_server):
+    """Regression test: editing a quantity triggers an AJAX swap that
+    rebuilds the table from a fresh, unsorted server render -- the active
+    sort must be reapplied automatically, not silently lost."""
+    page.goto(live_server)
+    page.wait_for_selector("#file-rows .file-row")
+    page.locator('input[type="file"]').first.set_input_files(str(FIXTURES_DIR / "simple.csv"))
+    page.click('button[type="submit"]', timeout=60000)
+    page.wait_for_selector(".summary-cards", timeout=60000)
+
+    priced_table = page.locator(".table-scroll table").first
+    part_header = priced_table.locator("thead th").first
+    part_header.click()  # ascending (no visible change, already default order)
+    part_header.click()  # descending -- 3023 first, 3005 second
+
+    rows = priced_table.locator("tbody tr")
+    assert "3023" in rows.nth(0).inner_text()
+
+    # Edit 3023's own quantity (now the first/top row post-sort) via its stepper.
+    priced_table.locator("tbody tr").nth(0).locator(".stepper-plus").click()
+    page.wait_for_timeout(500)
+
+    # Sort must still be descending by Part after the AJAX swap.
+    rows = priced_table.locator("tbody tr")
+    assert "3023" in rows.nth(0).inner_text()
+    assert "3005" in rows.nth(1).inner_text()
+    expect(part_header).to_have_class("sortable-col sort-desc")
+
+
+def test_unsaved_manual_price_survives_a_quantity_edit(page, live_server):
+    """Regression test: typing a manual price for a not-found piece, then
+    editing a *different* row's quantity (which AJAX-swaps the whole page),
+    must not silently discard the not-yet-submitted manual price."""
+    page.goto(live_server)
+    page.wait_for_selector("#file-rows .file-row")
+    page.locator('input[type="file"]').first.set_input_files(str(FIXTURES_DIR / "simple.csv"))
+    page.click('button[type="submit"]', timeout=60000)
+    page.wait_for_selector(".summary-cards", timeout=60000)
+
+    manual_price_input = page.locator('input[name^="manual_price_"]').first
+    manual_price_input.fill("0.15")
+
+    # Edit a different row's (3005, in the priced table) quantity -- this
+    # AJAX-swaps <main> and would previously blank the manual price above.
+    priced_table = page.locator(".table-scroll table").first
+    priced_table.locator("tbody tr").first.locator(".stepper-plus").click()
+    page.wait_for_timeout(500)
+
+    manual_price_input = page.locator('input[name^="manual_price_"]').first
+    assert manual_price_input.input_value() == "0.15"

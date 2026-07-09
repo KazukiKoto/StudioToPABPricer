@@ -37,6 +37,17 @@ if (confirmModal) {
   });
 }
 
+// ---- Cross-render client state ------------------------------------------
+// An AJAX swap (submitViaAjax) replaces <main>'s entire innerHTML with a
+// freshly server-rendered copy -- unsorted, and with manual-price inputs
+// blank except for whatever's already been saved via "Update Prices". These
+// two maps are declared outside initMainContent (so they survive being
+// re-run on every swap, unlike its own local variables) and let a qty/copies
+// edit restore the active sort and any not-yet-submitted manual price
+// instead of silently discarding them.
+const sortState = {}; // { [tableId]: { colIndex, dir } }
+const manualPriceDrafts = {}; // { [partKey]: rawInputValue }
+
 // ---- Everything inside <main> -----------------------------------------
 // Re-run after every AJAX swap (see submitViaAjax below), since replacing
 // <main>'s innerHTML destroys these elements and their listeners along
@@ -238,6 +249,14 @@ function initMainContent() {
       const newMain = newDoc.querySelector("main");
       const currentMain = document.querySelector("main");
       if (newMain && currentMain) {
+        // Capture any not-yet-submitted manual price edits before this
+        // swap destroys them -- initMainContent() below restores matching
+        // values into the freshly rendered inputs.
+        currentMain.querySelectorAll(".manual-price-input").forEach((input) => {
+          const key = input.dataset.partKey;
+          if (key) manualPriceDrafts[key] = input.value;
+        });
+
         currentMain.innerHTML = newMain.innerHTML;
         document.title = newDoc.title;
         initMainContent();
@@ -482,35 +501,57 @@ function initMainContent() {
   document.querySelectorAll(".sortable-table").forEach((table) => {
     const headers = Array.from(table.querySelectorAll("thead th"));
     const tbody = table.querySelector("tbody");
+    const tableId = table.dataset.tableId;
     if (!tbody) return;
 
-    headers.forEach((th, colIndex) => {
-      function sort() {
-        const dir = th.classList.contains("sort-asc") ? "desc" : "asc";
-        headers.forEach((h) => h.classList.remove("sort-asc", "sort-desc"));
-        th.classList.add(dir === "asc" ? "sort-asc" : "sort-desc");
+    function applySort(colIndex, dir) {
+      headers.forEach((h) => h.classList.remove("sort-asc", "sort-desc"));
+      headers[colIndex].classList.add(dir === "asc" ? "sort-asc" : "sort-desc");
 
-        const rows = Array.from(tbody.querySelectorAll("tr"));
-        rows.sort((a, b) => {
-          const aVal = cellSortValue(a.children[colIndex]);
-          const bVal = cellSortValue(b.children[colIndex]);
-          const aNum = parseFloat(aVal.replace(/[^0-9.-]/g, ""));
-          const bNum = parseFloat(bVal.replace(/[^0-9.-]/g, ""));
-          const bothNumeric = aVal !== "" && bVal !== "" && !Number.isNaN(aNum) && !Number.isNaN(bNum);
-          const cmp = bothNumeric ? aNum - bNum : aVal.localeCompare(bVal);
-          return dir === "asc" ? cmp : -cmp;
-        });
-        rows.forEach((row) => tbody.appendChild(row));
+      const rows = Array.from(tbody.querySelectorAll("tr"));
+      rows.sort((a, b) => {
+        const aVal = cellSortValue(a.children[colIndex]);
+        const bVal = cellSortValue(b.children[colIndex]);
+        const aNum = parseFloat(aVal.replace(/[^0-9.-]/g, ""));
+        const bNum = parseFloat(bVal.replace(/[^0-9.-]/g, ""));
+        const bothNumeric = aVal !== "" && bVal !== "" && !Number.isNaN(aNum) && !Number.isNaN(bNum);
+        const cmp = bothNumeric ? aNum - bNum : aVal.localeCompare(bVal);
+        return dir === "asc" ? cmp : -cmp;
+      });
+      rows.forEach((row) => tbody.appendChild(row));
+      if (tableId) sortState[tableId] = { colIndex, dir };
+    }
+
+    headers.forEach((th, colIndex) => {
+      function sortFromClick() {
+        const dir = th.classList.contains("sort-asc") ? "desc" : "asc";
+        applySort(colIndex, dir);
       }
 
-      th.addEventListener("click", sort);
+      th.addEventListener("click", sortFromClick);
       th.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          sort();
+          sortFromClick();
         }
       });
     });
+
+    // Restore this table's sort (if any) after an AJAX swap rebuilt it from
+    // scratch -- otherwise every quantity/copies edit would silently reset
+    // whatever the user had sorted by.
+    if (tableId && sortState[tableId]) {
+      applySort(sortState[tableId].colIndex, sortState[tableId].dir);
+    }
+  });
+
+  // Restore any not-yet-submitted manual price edits an AJAX swap would
+  // otherwise have blanked out (captured in submitViaAjax before the swap).
+  document.querySelectorAll(".manual-price-input").forEach((input) => {
+    const key = input.dataset.partKey;
+    if (key && Object.prototype.hasOwnProperty.call(manualPriceDrafts, key)) {
+      input.value = manualPriceDrafts[key];
+    }
   });
 
   // ---- Split download button dropdown ----
