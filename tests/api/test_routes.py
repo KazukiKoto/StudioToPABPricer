@@ -212,6 +212,30 @@ def test_download_detailed_returns_full_csv(app_client, csrf_token):
     assert "Availability" in resp.text.splitlines()[0]
 
 
+def test_download_detailed_includes_pab_link_excluding_manual_rows(app_client, csrf_token):
+    """The detailed CSV gets a PAB search-link column per row, except for
+    manually-priced pieces (PAB doesn't list them at all, so a link would be
+    misleading). Not shown on the results page itself -- download-only."""
+    files, data = _upload_files(csrf_token, ("simple.csv", 1))
+    upload_resp = app_client.post("/upload", files=files, data=data)
+    token = _extract_token(upload_resp.text)
+
+    app_client.post(f"/finalize/{token}", data={"manual_price_2": "0.15", "csrf_token": csrf_token})
+
+    resp = app_client.get(f"/download/{token}/detailed")
+    assert resp.status_code == 200
+    lines = resp.text.splitlines()
+    header = lines[0].split(",")
+    assert "PABLink" in header
+    assert "PABLink" not in upload_resp.text  # never rendered on the results page
+
+    link_col = header.index("PABLink")
+    rows_by_part = {line.split(",")[0]: line.split(",") for line in lines[1:] if line}
+
+    assert rows_by_part["3005"][link_col] == "https://www.lego.com/en-gb/pick-and-build/pick-a-brick?query=3005"
+    assert rows_by_part["3867"][link_col] == ""  # manually priced -- left blank
+
+
 def test_download_default_redirects_to_simple(app_client, csrf_token):
     files, data = _upload_files(csrf_token, ("simple.csv", 1))
     upload_resp = app_client.post("/upload", files=files, data=data)

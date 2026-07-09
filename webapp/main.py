@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from pab_pricer.pricer import (
+    PAB_URL,
     merge_duplicate_parts,
     price_rows,
     read_brick_rows,
@@ -167,6 +168,15 @@ def _scale_row(row: dict[str, str], multiplier: int) -> dict[str, str]:
 def _source_name(session: dict) -> str:
     names = [f["name"] for f in session["files"]]
     return names[0] if len(names) == 1 else f"{len(names)} combined CSVs"
+
+
+def _pab_link(bl_item_no: str) -> str:
+    """Link to PAB's search results for a part number -- the same query the
+    pricer itself fetches (pab_pricer.pricer.fetch_part_siblings), so it's
+    known to actually resolve. Element-specific deep links aren't exposed by
+    PAB's search API, so this points at the part's search results rather
+    than one exact colour."""
+    return f"{PAB_URL.format(locale=LOCALE)}?query={bl_item_no}"
 
 
 def _materialize(session: dict) -> list[dict[str, str]]:
@@ -590,7 +600,14 @@ def download_detailed(token: str):
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = OUTPUTS_DIR / f"{timestamp}_detailed_{token[:8]}.csv"
-    write_priced_csv(_materialize(session), output_path)
+
+    rows = _materialize(session)
+    for row in rows:
+        # Manual prices are for pieces PAB doesn't list at all, so a search
+        # link for them would just be misleading -- left blank instead.
+        if row["Availability"] != "MANUAL":
+            row["PABLink"] = _pab_link(row["BLItemNo"])
+    write_priced_csv(rows, output_path)
 
     return FileResponse(
         output_path,
